@@ -293,15 +293,14 @@ struct SongView: View {
     }
 
     private func stopPreview() {
-        guard let p = player else { return }
-        p.setVolume(0, fadeDuration: 0.3)
-        let captured = p
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            captured.stop()
-            try? AVAudioSession.sharedInstance().setActive(
-                false, options: [.notifyOthersOnDeactivation]
-            )
-        }
+        // Clean cut, no fade. A fade would (a) be audible during the
+        // handoff to the splash, and (b) leave a live player + deferred
+        // stop work on main while the splash is trying to load/decode its
+        // own audio. Stop now, drop the reference, let the splash own the
+        // shared AVAudioSession from here on. Per engine principle:
+        // "Teardown is explicit. ... stopped by name when the screen goes
+        // away."
+        player?.stop()
         player = nil
     }
 }

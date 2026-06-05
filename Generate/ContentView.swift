@@ -93,6 +93,20 @@ struct GeneratedImage: Identifiable, Hashable, Sendable {
     let file: String
     let prompt: String
     let source: Source
+    /// Index into `GenerateViewModel.audiolines`. Nil before lyrics are pasted.
+    /// Drives the Photos-style by-line grouping in the grid.
+    var lineIndex: Int? = nil
+}
+
+/// A single timed lyric line. Server-side forced alignment is the production
+/// path; the client stub in `pasteLyrics` assigns equal 6s windows as a
+/// placeholder until that pipeline exists.
+struct SongLine: Identifiable, Hashable, Sendable {
+    let id: UUID
+    let index: Int
+    let text: String
+    let startMs: Int
+    let durationMs: Int
 }
 
 struct GeneratedVideo: Identifiable, Hashable, Sendable {
@@ -117,6 +131,16 @@ struct PendingVideo: Identifiable, Hashable, Sendable {
 struct PendingImage: Identifiable, Hashable, Sendable {
     enum State: Hashable, Sendable { case working, failed }
     let id: UUID
+    var state: State = .working
+}
+
+/// An in-flight image generation (derive or fill-line). Rendered as a shimmer
+/// cell in the grid so the rest of the UI stays interactive. `lineIndex` is
+/// pre-computed at task start so the cell lands in the correct section.
+struct PendingGeneration: Identifiable, Hashable, Sendable {
+    enum State: Hashable, Sendable { case working, failed }
+    let id: UUID
+    let lineIndex: Int?
     var state: State = .working
 }
 
@@ -358,6 +382,94 @@ private struct GenerateService: Sendable {
         )
     }
 
+    // MARK: - Line-scoped audio for video generation
+
+    /// Downloads the project audio, trims to `(startMs, durationMs)` via
+    /// AVAssetExportSession, uploads the slice as a new Audio record, returns
+    /// the resulting server filename. Caller passes the trimmed filename to
+    /// NanoRenSpica so the audio-conditioned video matches the lyric line's
+    /// moment in the song. Throws on any step — caller is expected to fall
+    /// back to the full project audio.
+    func trimAndUploadAudioClip(
+        sourceAudioFile: String,
+        startMs: Int,
+        durationMs: Int
+    ) async throws -> String {
+        guard let sourceURL = Media.url(sourceAudioFile) else {
+            throw NSError(domain: "Audio", code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "Bad source audio filename"])
+        }
+        // 1) Fetch source bytes (Media.session caches so repeated trims for
+        // the same song don't re-download).
+        var req = URLRequest(url: sourceURL)
+        for (k, v) in Media.authHeaders { req.setValue(v, forHTTPHeaderField: k) }
+        let (data, _) = try await Media.session.data(for: req)
+        let tempDir = FileManager.default.temporaryDirectory
+        let sourceLocal = tempDir.appendingPathComponent("source-\(UUID().uuidString).m4a")
+        try data.write(to: sourceLocal)
+        defer { try? FileManager.default.removeItem(at: sourceLocal) }
+
+        // 2) Trim with AVAssetExportSession.
+        let asset = AVURLAsset(url: sourceLocal)
+        guard let exporter = AVAssetExportSession(
+            asset: asset, presetName: AVAssetExportPresetAppleM4A
+        ) else {
+            throw NSError(domain: "Audio", code: -2,
+                userInfo: [NSLocalizedDescriptionKey: "No exporter for asset"])
+        }
+        let outputURL = tempDir.appendingPathComponent("clip-\(UUID().uuidString).m4a")
+        let start = CMTime(value: Int64(startMs), timescale: 1000)
+        let dur = CMTime(value: Int64(durationMs), timescale: 1000)
+        exporter.timeRange = CMTimeRange(start: start, duration: dur)
+        try await exporter.export(to: outputURL, as: .m4a)
+        defer { try? FileManager.default.removeItem(at: outputURL) }
+
+        // 3) Upload as Audio multipart.
+        let clipData = try Data(contentsOf: outputURL)
+        return try await uploadAudioBinary(
+            data: clipData,
+            suggestedName: "clip-\(UUID().uuidString).m4a"
+        )
+    }
+
+    func uploadAudioBinary(data: Data, suggestedName: String) async throws -> String {
+        var request = URLRequest(url: URL(string: ApiAPIConfiguration.shared.basePath + "/audio")!)
+        request.httpMethod = "POST"
+        for (k, v) in Media.authHeaders { request.setValue(v, forHTTPHeaderField: k) }
+        let boundary = "Boundary-\(UUID().uuidString)"
+        request.setValue("multipart/form-data; boundary=\(boundary)",
+                         forHTTPHeaderField: "Content-Type")
+
+        var body = Data()
+        func append(_ s: String) { body.append(s.data(using: .utf8)!) }
+        append("--\(boundary)\r\n")
+        append("Content-Disposition: form-data; name=\"user_id\"\r\n\r\n")
+        append("\(AppAuth.userId)\r\n")
+        append("--\(boundary)\r\n")
+        append("Content-Disposition: form-data; name=\"upsert[data][0][id]\"\r\n\r\n")
+        append("\(UUID().uuidString)\r\n")
+        append("--\(boundary)\r\n")
+        append("Content-Disposition: form-data; name=\"upsert[data][0][file]\"; filename=\"\(suggestedName)\"\r\n")
+        append("Content-Type: audio/mp4\r\n\r\n")
+        body.append(data)
+        append("\r\n--\(boundary)--\r\n")
+        request.httpBody = body
+
+        let (responseData, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse,
+              (200..<300).contains(http.statusCode)
+        else {
+            throw NSError(domain: "Audio", code: -4,
+                userInfo: [NSLocalizedDescriptionKey: "Audio upload failed"])
+        }
+        let server = try JSONDecoder().decode(AudioServerRequest.self, from: responseData)
+        guard let file = server.upsert?.data.first?.file else {
+            throw NSError(domain: "Audio", code: -5,
+                userInfo: [NSLocalizedDescriptionKey: "No file in audio upload response"])
+        }
+        return file
+    }
+
     func uploadImageBinary(data: Data, suggestedName: String) async throws -> String {
         var request = URLRequest(url: URL(string: ApiAPIConfiguration.shared.basePath + "/image")!)
         request.httpMethod = "POST"
@@ -394,36 +506,61 @@ private struct GenerateService: Sendable {
     }
 }
 
-// MARK: - Onboarding audio (one-shot WAV, polite session, fade in/out)
+// MARK: - Onboarding audio (app-scoped, primed at launch)
 
+/// App-scoped singleton. `prepare(...)` runs the heavy work (bundle URL
+/// lookup, decode, prepareToPlay) off-main. Call it once at launch — by the
+/// time the splash appears the player is sitting ready. `start()` is the hot
+/// path: no I/O, just `play()` on main. Per engine: heavy work runs detached,
+/// then hands off — the interactive moment never blocks on I/O.
 @MainActor @Observable
-private final class OnboardingAudio {
+final class OnboardingAudio {
+    static let shared = OnboardingAudio()
+
     private var player: AVAudioPlayer?
     private var hasStarted = false
+    private var preparing = false
 
-    /// Idempotent. Starts the one-shot WAV with a 300ms fade-in to 60% volume.
-    /// Uses `.ambient` + `mixWithOthers` so the silent switch is respected and
-    /// any audio the user already had playing isn't interrupted.
-    func start(resource: String, ext: String) {
-        guard !hasStarted else { return }
+    private init() {}
+
+    /// Idempotent. Loads + decodes the WAV off-main. Safe to call repeatedly.
+    func prepare(resource: String, ext: String) {
+        guard player == nil, !preparing else { return }
+        preparing = true
+        Task.detached(priority: .userInitiated) { [weak self] in
+            guard let url = Bundle.main.url(forResource: resource, withExtension: ext)
+            else {
+                await MainActor.run { [weak self] in self?.preparing = false }
+                return
+            }
+            do {
+                let p = try AVAudioPlayer(contentsOf: url)
+                p.numberOfLoops = 0
+                p.volume = 0
+                p.prepareToPlay()
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    self.player = p
+                    self.preparing = false
+                }
+            } catch {
+                await MainActor.run { [weak self] in self?.preparing = false }
+            }
+        }
+    }
+
+    /// Splash mount calls this. Player is always primed by app-launch
+    /// `prepare(...)` — by the time the user picks a song, previews it, and
+    /// taps "Use this song", prepare has finished. Just session-activate + play().
+    func start(resource _: String, ext _: String) {
+        guard !hasStarted, let p = player else { return }
         hasStarted = true
-        guard let url = Bundle.main.url(forResource: resource, withExtension: ext) else {
-            return
-        }
-        do {
-            try AVAudioSession.sharedInstance().setCategory(.ambient, mode: .default,
-                                                             options: [.mixWithOthers])
-            try AVAudioSession.sharedInstance().setActive(true)
-            let p = try AVAudioPlayer(contentsOf: url)
-            p.numberOfLoops = 0
-            p.volume = 0
-            p.prepareToPlay()
-            p.play()
-            p.setVolume(0.6, fadeDuration: 0.3)
-            self.player = p
-        } catch {
-            // Audio is nice-to-have; never block the flow on failure.
-        }
+        try? AVAudioSession.sharedInstance().setCategory(
+            .ambient, mode: .default, options: [.mixWithOthers]
+        )
+        try? AVAudioSession.sharedInstance().setActive(true)
+        p.play()
+        p.setVolume(0.6, fadeDuration: 0.3)
     }
 
     /// Cross-fades to silence over `duration` seconds, then releases the session.
@@ -573,6 +710,7 @@ private final class GenerateViewModel {
     var videos: [GeneratedVideo] = []
     var pendingVideos: [PendingVideo] = []
     var pendingImages: [PendingImage] = []
+    var pendingGenerations: [PendingGeneration] = []
 
     var credit: Credit?
     var pricing: Pricing?
@@ -581,7 +719,14 @@ private final class GenerateViewModel {
 
     var presentingCostBreakdown = false
     var presentingTopup = false
+    var presentingLyricPaste = false
     private var pendingActionAfterTopup: (() -> Void)?
+
+    /// Pasted lyrics text. Nil until the user pastes via the scene-player
+    /// affordance. Once set, the grid switches from flat to sectioned-by-line.
+    var lyrics: String?
+    /// Timed lyric lines. Populated by `pasteLyrics`. Nil before paste.
+    var audiolines: [SongLine]?
 
     /// Set once the user agrees to the bandwidth + generation cost breakdown.
     /// After this we silently deduct costs (still showing the inline cost on CTAs).
@@ -593,7 +738,7 @@ private final class GenerateViewModel {
 
     let likeStore = LikeStore()
     let store = StoreService()
-    let onboardingAudio = OnboardingAudio()
+    let onboardingAudio = OnboardingAudio.shared
     private let service = GenerateService()
 
     // Derived
@@ -621,6 +766,129 @@ private final class GenerateViewModel {
     /// Approximate "this loop will cost a few credits in bandwidth" hint shown in the consent sheet.
     /// Actual rate is 100 credits/GB (server-driven via `pricing.gb`), min 1 credit per file.
     var bandwidthMinPerFile: Int64 { 1 }
+
+    // MARK: - Lyrics + line cursor
+
+    /// User pastes lyrics from the scene player. Stub force-alignment: split on
+    /// newlines, assign equal 6s windows. Server-side WhisperX alignment is the
+    /// real path — this client stub exists so the UX can land without it.
+    func pasteLyrics(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let rawLines = trimmed
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        let lines = rawLines.enumerated().map { idx, text in
+            SongLine(
+                id: UUID(),
+                index: idx,
+                text: text,
+                startMs: idx * 6_000,
+                durationMs: 6_000
+            )
+        }
+        self.lyrics = trimmed
+        withAnimation(.spring(duration: 0.5)) {
+            self.audiolines = lines
+            backfillLineIndices()
+        }
+    }
+
+    /// On first lyric paste, walk through existing untagged images and assign
+    /// them line indices in order. After this every image in `images` has a
+    /// `lineIndex` (modulo the line count if more images than lines).
+    private func backfillLineIndices() {
+        guard let audiolines, !audiolines.isEmpty else { return }
+        var nextLine = 0
+        for i in images.indices where images[i].lineIndex == nil {
+            images[i].lineIndex = audiolines[nextLine % audiolines.count].index
+            nextLine += 1
+        }
+    }
+
+    /// Cursor through the song: returns up to `count` line indices that
+    /// currently have no images. Wraps around when all lines are covered.
+    func nextUnfilledLines(count: Int) -> [Int] {
+        guard let audiolines, !audiolines.isEmpty else { return [] }
+        let used = Set(images.compactMap { $0.lineIndex })
+        var result: [Int] = []
+        for line in audiolines where !used.contains(line.index) {
+            result.append(line.index)
+            if result.count >= count { return result }
+        }
+        // All lines filled at least once — fall through, wrapping by index.
+        var i = 0
+        while result.count < count {
+            result.append(audiolines[i % audiolines.count].index)
+            i += 1
+        }
+        return result
+    }
+
+    /// Stamp a fresh line index on each image in a freshly-returned batch.
+    /// Pre-lyrics this is a no-op — images stay untagged until backfill.
+    func tagBatch(_ batch: [GeneratedImage]) -> [GeneratedImage] {
+        guard audiolines != nil else { return batch }
+        let lineIndices = nextUnfilledLines(count: batch.count)
+        return batch.enumerated().map { (offset, image) in
+            var tagged = image
+            if offset < lineIndices.count {
+                tagged.lineIndex = lineIndices[offset]
+            }
+            return tagged
+        }
+    }
+
+    /// Power-user override (context menu on a section header): generate 3
+    /// images all tagged with the given line index. Pending cells appear in
+    /// the section immediately, real images replace them when generation
+    /// completes. Bypasses the cursor — user is directly addressing a moment.
+    func fillLine(_ lineIndex: Int) {
+        guard let audiolines, audiolines.contains(where: { $0.index == lineIndex })
+        else { return }
+        guard gateOnCredit(cost: generationCost, retry: { [weak self] in
+            self?.fillLine(lineIndex)
+        }) else { return }
+
+        let seedText = audiolines.first(where: { $0.index == lineIndex })?.text
+            ?? project?.summary
+            ?? "A vibrant music video moment"
+        let pendings = (0..<3).map { _ in
+            PendingGeneration(id: UUID(), lineIndex: lineIndex)
+        }
+        let pendingIds = pendings.map(\.id)
+
+        withAnimation(.spring(duration: 0.3)) {
+            pendingGenerations.append(contentsOf: pendings)
+        }
+
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let enriched = try await self.service.chatPrompt(seedText)
+                let batch = await self.service.generateImageBatch(prompt: enriched)
+                let tagged = batch.map { img -> GeneratedImage in
+                    var t = img; t.lineIndex = lineIndex; return t
+                }
+                await MainActor.run {
+                    withAnimation(.spring(duration: 0.35)) {
+                        self.pendingGenerations.removeAll { pendingIds.contains($0.id) }
+                        self.images.append(contentsOf: tagged)
+                    }
+                }
+                await self.refreshCredit()
+            } catch {
+                await MainActor.run {
+                    for i in self.pendingGenerations.indices
+                        where pendingIds.contains(self.pendingGenerations[i].id) {
+                        self.pendingGenerations[i].state = .failed
+                    }
+                    self.errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
 
     // Lifecycle
 
@@ -676,7 +944,7 @@ private final class GenerateViewModel {
         do {
             let enriched = try await service.chatPrompt(seed)
             let batch = await service.generateImageBatch(prompt: enriched)
-            images = batch
+            images = tagBatch(batch)
             await refreshCredit()
             phase = .grid
             tutorialMoment = .tapImageToDerive
@@ -690,26 +958,72 @@ private final class GenerateViewModel {
 
     func openDerive(_ image: GeneratedImage) { phase = .derive(image: image) }
 
-    func submitDerivation(from image: GeneratedImage, tweak: String) async {
-        let captured = (image, tweak)
+    /// Fire-and-forget. Pops back to the grid immediately, drops shimmer cells
+    /// in the right sections, and runs the actual generation in a background
+    /// Task — same UX pattern as `confirmMakeVideo`. The user can derive more,
+    /// like, browse, queue more videos while this is cooking.
+    func submitDerivation(from image: GeneratedImage, tweak: String) {
         guard gateOnCredit(cost: generationCost, retry: { [weak self] in
-            Task { await self?.submitDerivation(from: captured.0, tweak: captured.1) }
+            self?.submitDerivation(from: image, tweak: tweak)
         }) else { return }
 
-        phase = .generating(.derived)
-        do {
-            let enriched = try await service.chatDerive(
-                priorPrompt: image.prompt, userTweak: tweak
-            )
-            let batch = await service.generateImageBatch(prompt: enriched)
-            images.append(contentsOf: batch)
-            await refreshCredit()
-            phase = .grid
-            if tutorialMoment == .tapImageToDerive { tutorialMoment = .likeAnImage }
-        } catch {
-            errorMessage = error.localizedDescription
+        // Pre-compute the line indices so the pending cells appear in their
+        // final sections immediately (no jumping when they resolve).
+        let lineIndices: [Int?] = {
+            guard audiolines != nil else {
+                return Array(repeating: nil, count: 3)
+            }
+            let next = nextUnfilledLines(count: 3)
+            return (0..<3).map { i in i < next.count ? next[i] : nil }
+        }()
+        let pendings = lineIndices.map { PendingGeneration(id: UUID(), lineIndex: $0) }
+        let pendingIds = pendings.map(\.id)
+        let priorPrompt = image.prompt
+
+        withAnimation(.spring(duration: 0.35)) {
+            pendingGenerations.append(contentsOf: pendings)
+            // Pop derive — back to grid with the shimmer cells in place.
             phase = .grid
         }
+
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let enriched = try await self.service.chatDerive(
+                    priorPrompt: priorPrompt, userTweak: tweak
+                )
+                let batch = await self.service.generateImageBatch(prompt: enriched)
+                let tagged = batch.enumerated().map { (offset, img) -> GeneratedImage in
+                    var t = img
+                    if offset < lineIndices.count, let li = lineIndices[offset] {
+                        t.lineIndex = li
+                    }
+                    return t
+                }
+                await MainActor.run {
+                    withAnimation(.spring(duration: 0.4)) {
+                        self.pendingGenerations.removeAll { pendingIds.contains($0.id) }
+                        self.images.append(contentsOf: tagged)
+                    }
+                    if self.tutorialMoment == .tapImageToDerive {
+                        self.tutorialMoment = .likeAnImage
+                    }
+                }
+                await self.refreshCredit()
+            } catch {
+                await MainActor.run {
+                    for i in self.pendingGenerations.indices
+                        where pendingIds.contains(self.pendingGenerations[i].id) {
+                        self.pendingGenerations[i].state = .failed
+                    }
+                    self.errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    func dismissPendingGeneration(_ id: UUID) {
+        withAnimation { pendingGenerations.removeAll { $0.id == id } }
     }
 
     // Like
@@ -790,13 +1104,40 @@ private final class GenerateViewModel {
             pendingVideos.append(pending)
         }
 
-        let audioFile = project.audio
+        let projectAudio = project.audio
         let prompt = primary.prompt
+        // Snapshot the line range for the primary image (if any) so the Task
+        // doesn't have to re-read main-actor state.
+        let lineRange: (start: Int, duration: Int)? = {
+            guard let lineIndex = primary.lineIndex,
+                  let line = audiolines?.first(where: { $0.index == lineIndex })
+            else { return nil }
+            return (line.startMs, line.durationMs)
+        }()
 
         Task { [weak self] in
             guard let self else { return }
             do {
                 let registered = try await self.service.registerImageForVideo(filename: primary.file)
+                // Trim the audio to the line's range when we have one. Audio
+                // conditioning still drives motion — we're just making sure
+                // the conditioning is on the right moment of the song.
+                let audioFile: String
+                if let r = lineRange {
+                    do {
+                        audioFile = try await self.service.trimAndUploadAudioClip(
+                            sourceAudioFile: projectAudio,
+                            startMs: r.start,
+                            durationMs: r.duration
+                        )
+                    } catch {
+                        // Fall back to the full project audio — generation
+                        // succeeds with a less precise audio range.
+                        audioFile = projectAudio
+                    }
+                } else {
+                    audioFile = projectAudio
+                }
                 let videoFile = try await self.service.generateVideo(
                     imageFile: registered,
                     audioFile: audioFile,
@@ -854,9 +1195,10 @@ private final class GenerateViewModel {
                     prompt: "Your picture",
                     source: .upload
                 )
+                let tagged = await MainActor.run { self.tagBatch([newImage]).first ?? newImage }
                 withAnimation(.spring(duration: 0.4)) {
                     self.pendingImages.removeAll { $0.id == pending.id }
-                    self.images.append(newImage)
+                    self.images.append(tagged)
                 }
                 await self.refreshCredit()
             } catch {
@@ -1051,8 +1393,10 @@ private final class PlayerUIView: UIView {
 /// .ambient on dismiss so the rest of the app stays polite.
 private struct VideoDetailView: View {
     let video: GeneratedVideo
+    @Bindable var viewModel: GenerateViewModel
     let onDismiss: () -> Void
     @State private var player: AVPlayer?
+    @State private var presentingLyricPaste = false
 
     var body: some View {
         ZStack {
@@ -1078,10 +1422,58 @@ private struct VideoDetailView: View {
                     .padding(16)
                 }
                 Spacer()
+                lyricsAffordance
             }
         }
         .task { setupPlayback() }
         .onDisappear { teardownPlayback() }
+        .sheet(isPresented: $presentingLyricPaste) {
+            LyricPasteSheet(
+                save: { text in viewModel.pasteLyrics(text) },
+                onClose: { presentingLyricPaste = false }
+            )
+            .presentationDetents([.large])
+            .presentationBackground(.regularMaterial)
+        }
+    }
+
+    /// Revelation moment: subtle affordance offering lyric overlay + perfect
+    /// timing. Hidden once the user has pasted lyrics — at that point the
+    /// machinery is in place and the overlay would be the next premium ask.
+    @ViewBuilder
+    private var lyricsAffordance: some View {
+        if viewModel.audiolines == nil {
+            Button {
+                presentingLyricPaste = true
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "text.justify.left")
+                        .font(.subheadline.weight(.semibold))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Add your lyrics")
+                            .font(.subheadline.weight(.semibold))
+                        Text("Make every moment sync to your words.")
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.bold))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(.ultraThinMaterial, in: .rect(cornerRadius: 18))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18)
+                        .stroke(Theme.accentMagenta.opacity(0.45), lineWidth: 1)
+                )
+                .padding(.horizontal, 20)
+                .padding(.bottom, 32)
+            }
+            .buttonStyle(.plain)
+            .transition(.opacity.combined(with: .move(edge: .bottom)))
+        }
     }
 
     private func setupPlayback() {
@@ -1105,6 +1497,103 @@ private struct VideoDetailView: View {
         try? AVAudioSession.sharedInstance().setCategory(
             .ambient, mode: .default, options: [.mixWithOthers]
         )
+    }
+}
+
+// MARK: - Lyric paste sheet
+
+/// Surfaces on first scene playback (`audiolines == nil`). User pastes their
+/// own lyrics; on Save the sheet dismisses immediately. Per HIG: ideally
+/// content displays instantly, success doesn't need a confirmation banner,
+/// and only failures warrant an alert. Failures (when the real server call
+/// lands) will surface via `viewModel.errorMessage` → `.alert`, not in here.
+///
+/// Layout follows Apple's compose-sheet pattern (Mail, Reminders, Calendar):
+/// `NavigationStack` + toolbar buttons + a TextEditor that fills the body.
+/// SwiftUI's built-in keyboard avoidance plays nicely with this structure
+/// because it's the layout Apple designed for — no manual keyboard observer,
+/// no decorative chrome that crops when the keyboard rises. Brand is layered
+/// on top via the principal title, the gradient Save button, and a dark
+/// `Theme.background` instead of the default sheet material.
+private struct LyricPasteSheet: View {
+    let save: (String) -> Void
+    let onClose: () -> Void
+
+    @State private var text: String = ""
+    @FocusState private var focused: Bool
+
+    private var trimmed: String {
+        text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack(alignment: .topLeading) {
+                Theme.background.ignoresSafeArea()
+
+                TextEditor(text: $text)
+                    .focused($focused)
+                    .font(.body)
+                    .foregroundStyle(Theme.onSurface)
+                    .scrollContentBackground(.hidden)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 8)
+                    .tint(Theme.accentMagenta)
+
+                if text.isEmpty {
+                    Text("Drop your lyrics here. One line at a time — the way your song breathes.")
+                        .font(.body.italic())
+                        .foregroundStyle(Theme.muted)
+                        .padding(.horizontal, 17)
+                        .padding(.top, 16)
+                        .padding(.trailing, 24)
+                        .allowsHitTesting(false)
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "text.justify.left")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Theme.accent)
+                        Text("Your lyrics")
+                            .font(.headline)
+                            .foregroundStyle(Theme.onSurface)
+                    }
+                }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        focused = false
+                        onClose()
+                    }
+                    .foregroundStyle(Theme.muted)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button {
+                        focused = false
+                        save(trimmed)
+                        onClose()
+                    } label: {
+                        Text("Save")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 6)
+                            .background(
+                                trimmed.isEmpty
+                                    ? AnyShapeStyle(Color.white.opacity(0.18))
+                                    : AnyShapeStyle(Theme.accent)
+                            )
+                            .clipShape(.capsule)
+                    }
+                    .disabled(trimmed.isEmpty)
+                }
+            }
+            .toolbarBackground(Theme.background, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+        }
+        .onAppear { focused = true }
     }
 }
 
@@ -1195,7 +1684,7 @@ struct ContentView: View {
                     .presentationBackground(.clear)
             }
             .fullScreenCover(item: $viewModel.viewingVideo) { video in
-                VideoDetailView(video: video) {
+                VideoDetailView(video: video, viewModel: viewModel) {
                     viewModel.viewingVideo = nil
                 }
             }
@@ -1707,6 +2196,111 @@ private struct KineticOnboardingView: View {
     .preferredColorScheme(.dark)
 }
 
+#Preview("Grid — Sectioned by line") {
+    @Previewable @State var vm: GenerateViewModel = {
+        let vm = GenerateViewModel()
+        vm.phase = .grid
+        // 8 lyric lines as if `pasteLyrics` ran.
+        let sampleLines = [
+            "I never thought I'd see the day",
+            "When you came back into my life",
+            "All the words I couldn't say",
+            "Echo through the city lights",
+            "Holding on to what we had",
+            "Letting go of everything",
+            "Maybe love was never sad",
+            "Maybe this is the beginning",
+        ]
+        vm.audiolines = sampleLines.enumerated().map { idx, text in
+            SongLine(id: UUID(), index: idx, text: text,
+                     startMs: idx * 6_000, durationMs: 6_000)
+        }
+        // Tag some images with line indices, leave a few sections empty
+        // (lines 3 and 6) so the ghost row shows.
+        let sampleFiles = [
+            "019e7f3d-7bff-7901-ac73-8c7372b56330.png",
+            "019e7f3d-a3c0-7e63-a239-d84846529654.png",
+            "019e7f3d-aa21-7173-86ae-fbe8d61d0a84.png",
+            "90.png", "91.png", "93.png",
+        ]
+        let coverage: [Int: Int] = [0: 3, 1: 2, 2: 6, 4: 3, 5: 1, 7: 4]
+        var images: [GeneratedImage] = []
+        var fileCursor = 0
+        for (lineIdx, count) in coverage.sorted(by: { $0.key < $1.key }) {
+            for _ in 0..<count {
+                images.append(GeneratedImage(
+                    id: UUID(),
+                    file: sampleFiles[fileCursor % sampleFiles.count],
+                    prompt: "Preview prompt",
+                    source: [.lyra, .vega, .luna][fileCursor % 3],
+                    lineIndex: lineIdx
+                ))
+                fileCursor += 1
+            }
+        }
+        vm.images = images
+        return vm
+    }()
+
+    NavigationStack {
+        GridView(viewModel: vm)
+            .background(Theme.background.ignoresSafeArea())
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("Sectioned").foregroundStyle(Theme.muted)
+                }
+            }
+    }
+    .preferredColorScheme(.dark)
+}
+
+#Preview("Grid — Pending generations in sections") {
+    @Previewable @State var vm: GenerateViewModel = {
+        let vm = GenerateViewModel()
+        vm.phase = .grid
+        let sampleLines = [
+            "I never thought I'd see the day",
+            "When you came back into my life",
+            "All the words I couldn't say",
+            "Echo through the city lights",
+        ]
+        vm.audiolines = sampleLines.enumerated().map { idx, text in
+            SongLine(id: UUID(), index: idx, text: text,
+                     startMs: idx * 6_000, durationMs: 6_000)
+        }
+        let sampleFiles = [
+            "019e7f3d-7bff-7901-ac73-8c7372b56330.png",
+            "019e7f3d-a3c0-7e63-a239-d84846529654.png",
+            "019e7f3d-aa21-7173-86ae-fbe8d61d0a84.png",
+        ]
+        vm.images = (0..<6).map { i in
+            GeneratedImage(
+                id: UUID(),
+                file: sampleFiles[i % sampleFiles.count],
+                prompt: "Preview prompt",
+                source: [.lyra, .vega, .luna][i % 3],
+                lineIndex: i / 3  // Half in line 0, half in line 1.
+            )
+        }
+        // Line 2 mid-generation (shimmer cells), line 3 untouched.
+        vm.pendingGenerations = (0..<3).map { _ in
+            PendingGeneration(id: UUID(), lineIndex: 2)
+        }
+        return vm
+    }()
+
+    NavigationStack {
+        GridView(viewModel: vm)
+            .background(Theme.background.ignoresSafeArea())
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("In-flight").foregroundStyle(Theme.muted)
+                }
+            }
+    }
+    .preferredColorScheme(.dark)
+}
+
 #Preview("Grid — Empty") {
     @Previewable @State var vm: GenerateViewModel = {
         let vm = GenerateViewModel()
@@ -1782,11 +2376,25 @@ private struct GridView: View {
         viewModel.filter == .all ? viewModel.pendingImages : []
     }
 
+    /// Pending generations only visible on the All filter for the same reason.
+    private var visiblePendingGenerations: [PendingGeneration] {
+        viewModel.filter == .all ? viewModel.pendingGenerations : []
+    }
+
     private var hasNoContent: Bool {
         let imagesEmpty = viewModel.filter == .videos
-            || (viewModel.filteredImages.isEmpty && visiblePendingImages.isEmpty)
+            || (viewModel.filteredImages.isEmpty
+                && visiblePendingImages.isEmpty
+                && visiblePendingGenerations.isEmpty)
         let videosEmpty = visibleVideos.isEmpty && visiblePendingVideos.isEmpty
         return imagesEmpty && videosEmpty
+    }
+
+    /// Sectioned layout kicks in only on the All filter and only after the
+    /// user has pasted lyrics. Liked / Videos stay flat — those are curation
+    /// surfaces and don't benefit from line grouping.
+    private var shouldSection: Bool {
+        viewModel.filter == .all && viewModel.audiolines != nil
     }
 
     var body: some View {
@@ -1794,43 +2402,135 @@ private struct GridView: View {
             filterBar
             if hasNoContent {
                 emptyState
+            } else if shouldSection, let audiolines = viewModel.audiolines {
+                sectionedScroll(audiolines: audiolines)
+                    .safeAreaInset(edge: .bottom) { makeVideoCta }
             } else {
-                ScrollView {
+                flatScroll
+                    .safeAreaInset(edge: .bottom) { makeVideoCta }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var makeVideoCta: some View {
+        if viewModel.isSelectingForVideo {
+            Button {
+                viewModel.confirmMakeVideo()
+            } label: {
+                HStack(spacing: 6) {
+                    Text("Make")
+                    Text("·").opacity(0.5)
+                    Image(systemName: "bolt.fill").font(.footnote)
+                    Text("\(viewModel.videoCost)").monospacedDigit()
+                }
+            }
+            .buttonStyle(AccentButtonStyle())
+            .disabled(viewModel.selectedImageIds.isEmpty)
+            .opacity(viewModel.selectedImageIds.isEmpty ? 0.5 : 1)
+            .padding(16)
+            .background(.regularMaterial)
+        }
+    }
+
+    // MARK: - Flat scroll (pre-lyrics or non-All filters)
+
+    private var flatScroll: some View {
+        ScrollView {
+            LazyVGrid(columns: columns, spacing: 2) {
+                if viewModel.filter != .videos {
+                    ForEach(visiblePendingImages) { pendingImageCell($0) }
+                    ForEach(visiblePendingGenerations) { pendingGenerationCell($0) }
+                    ForEach(viewModel.filteredImages) { imageCell($0) }
+                }
+                ForEach(visiblePendingVideos) { pendingCell($0) }
+                ForEach(visibleVideos) { videoCell($0) }
+            }
+            .padding(.horizontal, 2)
+            .padding(.top, 6)
+        }
+    }
+
+    // MARK: - Sectioned scroll (post-lyrics, All filter)
+
+    /// Photos-style sectioned grid. Each lyric line is a `Section` with a
+    /// pinned header that sticks to the top of the viewport as you scroll —
+    /// matches the Photos.app pattern. Empty lines render as the header
+    /// alone (no body), keeping the song's structure visible without noise.
+    @ViewBuilder
+    private func sectionedScroll(audiolines: [SongLine]) -> some View {
+        ScrollView {
+            LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                if !visiblePendingImages.isEmpty || !visiblePendingVideos.isEmpty {
                     LazyVGrid(columns: columns, spacing: 2) {
-                        // Pending uploads first so the user sees feedback instantly.
-                        if viewModel.filter != .videos {
-                            ForEach(visiblePendingImages) { pendingImageCell($0) }
-                            ForEach(viewModel.filteredImages) { imageCell($0) }
-                        }
+                        ForEach(visiblePendingImages) { pendingImageCell($0) }
                         ForEach(visiblePendingVideos) { pendingCell($0) }
-                        ForEach(visibleVideos) { videoCell($0) }
                     }
                     .padding(.horizontal, 2)
                     .padding(.top, 6)
                 }
-                // In select mode, the final "Make" CTA rides above the home indicator
-                // and pushes content above it.
-                .safeAreaInset(edge: .bottom) {
-                    if viewModel.isSelectingForVideo {
-                        Button {
-                            viewModel.confirmMakeVideo()
-                        } label: {
-                            HStack(spacing: 6) {
-                                Text("Make")
-                                Text("·").opacity(0.5)
-                                Image(systemName: "bolt.fill").font(.footnote)
-                                Text("\(viewModel.videoCost)").monospacedDigit()
+
+                ForEach(audiolines) { line in
+                    let imagesForLine = viewModel.filteredImages.filter { $0.lineIndex == line.index }
+                    let pendingsForLine = visiblePendingGenerations.filter { $0.lineIndex == line.index }
+                    Section {
+                        if !pendingsForLine.isEmpty || !imagesForLine.isEmpty {
+                            LazyVGrid(columns: columns, spacing: 2) {
+                                ForEach(pendingsForLine) { pendingGenerationCell($0) }
+                                ForEach(imagesForLine) { imageCell($0) }
                             }
+                            .padding(.horizontal, 2)
+                            .padding(.top, 4)
                         }
-                        .buttonStyle(AccentButtonStyle())
-                        .disabled(viewModel.selectedImageIds.isEmpty)
-                        .opacity(viewModel.selectedImageIds.isEmpty ? 0.5 : 1)
-                        .padding(16)
-                        .background(.regularMaterial)
+                    } header: {
+                        sectionHeader(
+                            line: line,
+                            imageCount: imagesForLine.count + pendingsForLine.count
+                        )
                     }
+                }
+
+                if !visibleVideos.isEmpty {
+                    LazyVGrid(columns: columns, spacing: 2) {
+                        ForEach(visibleVideos) { videoCell($0) }
+                    }
+                    .padding(.horizontal, 2)
+                    .padding(.top, 12)
                 }
             }
         }
+    }
+
+    /// Photos-style section header: bold display title + small caption
+    /// underneath, opaque background so the pinned state reads cleanly.
+    /// Native power-user discovery via `.contextMenu` (long-press surfaces
+    /// the action with iOS's own animation + haptic).
+    @ViewBuilder
+    private func sectionHeader(line: SongLine, imageCount: Int) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(line.text)
+                .font(.title2.weight(.bold))
+                .foregroundStyle(Theme.onSurface)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+            Text(imageCount == 0 ? "No pictures yet"
+                                : "\(imageCount) \(imageCount == 1 ? "picture" : "pictures")")
+                .font(.subheadline)
+                .foregroundStyle(Theme.muted)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.top, 28)
+        .padding(.bottom, 10)
+        .background(Theme.background)
+        .contextMenu {
+            Button {
+                viewModel.fillLine(line.index)
+            } label: {
+                Label("Make pictures for this line", systemImage: "sparkles")
+            }
+        }
+        .accessibilityLabel(line.text)
     }
 
     // MARK: - Empty state (C6)
@@ -2019,6 +2719,50 @@ private struct GridView: View {
             }
     }
 
+    /// Shimmer cell for in-flight image generation (derive or fill-line).
+    /// Same visual language as `pendingImageCell` — the user reads "something
+    /// is being made for this slot" without us having to label which kind.
+    @ViewBuilder
+    private func pendingGenerationCell(_ pending: PendingGeneration) -> some View {
+        Color.clear
+            .aspectRatio(1, contentMode: .fit)
+            .overlay {
+                ZStack {
+                    Theme.surface
+                    if pending.state == .working {
+                        Shimmer()
+                        VStack(spacing: 8) {
+                            ProgressView()
+                                .progressViewStyle(.circular)
+                                .tint(.white)
+                            Text("Making…")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.white)
+                                .shadow(color: .black.opacity(0.5), radius: 4)
+                        }
+                    } else {
+                        VStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.title3)
+                                .foregroundStyle(.white)
+                            Text("Failed — tap to dismiss")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.white)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 8)
+                        }
+                    }
+                }
+            }
+            .clipped()
+            .contentShape(.rect)
+            .onTapGesture {
+                if pending.state == .failed {
+                    viewModel.dismissPendingGeneration(pending.id)
+                }
+            }
+    }
+
     /// Shimmer cell with the source picture as a soft poster while video gen runs.
     /// When generation fails, taps dismiss the cell.
     @ViewBuilder
@@ -2201,7 +2945,7 @@ private struct DeriveView: View {
         .safeAreaInset(edge: .bottom) {
             Button {
                 focused = false
-                Task { await viewModel.submitDerivation(from: image, tweak: trimmed) }
+                viewModel.submitDerivation(from: image, tweak: trimmed)
             } label: {
                 HStack(spacing: 6) {
                     if trimmed.isEmpty {
