@@ -7,20 +7,22 @@
 
 import Foundation
 
+/** Put default values */
 public struct ApplePay: Sendable, Codable, Hashable {
 
-    public var credit: Int64?
-    public var currency: String?
+    public var credit: Int64
+    public var currency: String
+    /** uuid v7 */
     public var id: UUID
     public var jws: String
-    public var loaded: Bool?
-    public var price: Int64?
-    public var productId: String?
-    public var status: Status?
-    public var transactionId: String?
+    public var loaded: Bool
+    public var price: Int64
+    public var productId: String
+    public var status: ApplePayStatus
+    public var transactionId: String
     public var userId: String
 
-    public init(credit: Int64? = nil, currency: String? = nil, id: UUID, jws: String, loaded: Bool? = nil, price: Int64? = nil, productId: String? = nil, status: Status? = nil, transactionId: String? = nil, userId: String) {
+    public init(credit: Int64, currency: String, id: UUID, jws: String, loaded: Bool, price: Int64, productId: String, status: ApplePayStatus, transactionId: String, userId: String) {
         self.credit = credit
         self.currency = currency
         self.id = id
@@ -50,15 +52,15 @@ public struct ApplePay: Sendable, Codable, Hashable {
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeIfPresent(credit, forKey: .credit)
-        try container.encodeIfPresent(currency, forKey: .currency)
+        try container.encode(credit, forKey: .credit)
+        try container.encode(currency, forKey: .currency)
         try container.encode(id, forKey: .id)
         try container.encode(jws, forKey: .jws)
-        try container.encodeIfPresent(loaded, forKey: .loaded)
-        try container.encodeIfPresent(price, forKey: .price)
-        try container.encodeIfPresent(productId, forKey: .productId)
-        try container.encodeIfPresent(status, forKey: .status)
-        try container.encodeIfPresent(transactionId, forKey: .transactionId)
+        try container.encode(loaded, forKey: .loaded)
+        try container.encode(price, forKey: .price)
+        try container.encode(productId, forKey: .productId)
+        try container.encode(status, forKey: .status)
+        try container.encode(transactionId, forKey: .transactionId)
         try container.encode(userId, forKey: .userId)
     }
 }

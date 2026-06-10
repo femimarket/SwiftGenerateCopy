@@ -75,6 +75,7 @@ Class | Method | HTTP request | Description
  - [ApplePayPaginate](docs/ApplePayPaginate.md)
  - [ApplePaySearch](docs/ApplePaySearch.md)
  - [ApplePayServerRequest](docs/ApplePayServerRequest.md)
+ - [ApplePayStatus](docs/ApplePayStatus.md)
  - [ApplePayUpdate](docs/ApplePayUpdate.md)
  - [ApplePayUpdateItem](docs/ApplePayUpdateItem.md)
  - [ApplePayUpsert](docs/ApplePayUpsert.md)

@@ -17,9 +17,17 @@ import Api
 // MARK: - Auth context (set once at app launch in GenerateApp.swift)
 
 enum AppAuth {
-    nonisolated(unsafe) static var bearer: String = ""
-    nonisolated(unsafe) static var userId: String = ""
+    static var bearer: String {
+        UserDefaults.standard.string(forKey: "idToken") ?? ""
+    }
+    static var userId: String {
+        jwtSub() ?? ""
+    }
 }
+
+/// Dev seed flag — set true to pre-populate GenerateViewModel with a sample
+/// project + bundled images. Off for normal runs.
+private let devSeedEnabled = false
 
 // MARK: - Theme
 
@@ -168,6 +176,14 @@ private struct GenerateService: Sendable {
             paginate: ProjectPaginate(data: nil, skip: 0, take: 1)
         )
         return response.paginate?.data?.first
+    }
+
+    func allProjects() async throws -> [Project] {
+        let response = try await ProjectRouteAPI.project(
+            userId: AppAuth.userId,
+            paginate: ProjectPaginate(data: nil, skip: 0, take: 50)
+        )
+        return response.paginate?.data ?? []
     }
 
     /// Hard cap on prompt size before sending to image models.
@@ -647,13 +663,23 @@ private final class StoreService {
             switch verification {
             case .unverified: return false
             case .verified(let transaction):
+                let priceMinor = NSDecimalNumber(decimal: product.price)
+                    .multiplying(by: 100)
+                    .int64Value
+                let currencyCode = product.priceFormatStyle.currencyCode
                 _ = try await ApplePayRouteAPI.applePay(
                     userId: AppAuth.userId,
                     upsert: ApplePayUpsert(data: [
                         ApplePay(
+                            credit: 0,
+                            currency: currencyCode,
                             id: UUID(),
                             jws: verification.jwsRepresentation,
+                            loaded: false,
+                            price: priceMinor,
                             productId: tier.rawValue,
+                            status: .pending,
+                            transactionId: String(transaction.id),
                             userId: AppAuth.userId
                         )
                     ])
@@ -676,7 +702,6 @@ private final class GenerateViewModel {
 
     enum Phase: Hashable {
         case onboarding
-        case startCta
         case generating(GenerationKind)
         case grid
         case derive(image: GeneratedImage)
@@ -694,7 +719,7 @@ private final class GenerateViewModel {
         }
     }
 
-    var phase: Phase = .onboarding
+    var phase: Phase = .grid
     var tutorialMoment: TutorialMoment = .none
     var filter: GridFilter = .all
 
@@ -720,7 +745,13 @@ private final class GenerateViewModel {
     var presentingCostBreakdown = false
     var presentingTopup = false
     var presentingLyricPaste = false
+    var presentingProjects = false
+    var presentingNewSong = false
     private var pendingActionAfterTopup: (() -> Void)?
+
+    /// All of the user's projects, loaded via paginate. Drives the toolbar
+    /// switcher list. Includes the current project.
+    var allProjects: [Project] = []
 
     /// Pasted lyrics text. Nil until the user pastes via the scene-player
     /// affordance. Once set, the grid switches from flat to sectioned-by-line.
@@ -740,6 +771,68 @@ private final class GenerateViewModel {
     let store = StoreService()
     let onboardingAudio = OnboardingAudio.shared
     private let service = GenerateService()
+
+    init() {
+        if devSeedEnabled { devSeed() }
+        seedDummyProjectsForUIDemo()
+    }
+
+    /// Temporary: populate `allProjects` with 10 placeholder Projects so the
+    /// Recent + A-Z + search UI in `ProjectsSheet` is visible without real
+    /// data. Names are NATO phonetic so they're clearly placeholders and
+    /// give A-Z spread. Remove this when real projects exist.
+    private func seedDummyProjectsForUIDemo() {
+        let names = [
+            "Alpha", "Bravo", "Charlie", "Delta", "Echo",
+            "Foxtrot", "Golf", "Hotel", "India", "Juliett",
+        ]
+        let dummies = names.map { name in
+            Project(
+                about: "", audio: "\(name.lowercased()).mp3", audioLines: [],
+                faqs: [], genre: "", id: UUID(), playlist: "",
+                seasons: [], summary: name, userId: AppAuth.userId
+            )
+        }
+        self.allProjects = dummies
+        self.project = dummies.first
+    }
+
+    /// Dev seed: skip Song → splash → CTA → first generation and land
+    /// in the grid pre-populated with a project + 3 images. Audio + image
+    /// filenames point at bundled assets so `AuthorizedImage`'s dev-mode
+    /// bundle short-circuit can render them without a network call. The
+    /// `summary` is derived from the audio file's name exactly like
+    /// `handleSongPicked` does — same code path as production.
+    private func devSeed() {
+        let seedProject = Project(
+            about: "",
+            audio: "9f420313-7a42-4e12-8367-24751afba0eb.mp3",
+            audioLines: [],
+            faqs: [],
+            genre: "",
+            id: UUID(),
+            playlist: "",
+            seasons: [],
+            summary: "",
+            userId: AppAuth.userId
+        )
+        self.allProjects = [seedProject]
+        self.project = seedProject
+        self.images = [
+            "019e7f3d-7bff-7901-ac73-8c7372b56330.png",
+            "019e7f3d-a3c0-7e63-a239-d84846529654.png",
+            "019e7f3d-aa21-7173-86ae-fbe8d61d0a84.png",
+        ].map { name in
+            GeneratedImage(
+                id: UUID(),
+                file: name,
+                prompt: "Dev seed",
+                source: .lyra
+            )
+        }
+        self.phase = .grid
+        self.hasGivenConsent = true
+    }
 
     // Derived
 
@@ -897,15 +990,91 @@ private final class GenerateViewModel {
         defer { loadingBalance = false }
         async let credit = try? service.currentCredit()
         async let pricing = try? service.currentPricing()
-        async let project = try? service.latestProject()
+        async let projects = try? service.allProjects()
         self.credit = await credit
         self.pricing = await pricing
-        self.project = await project
+        let loaded = await projects ?? []
+        // Don't overwrite the UI-demo dummy seed when bootstrap returns empty.
+        if !loaded.isEmpty { self.allProjects = loaded }
+        // First-run gateway is handled in RootView (SongView appears
+        // instantly there). By the time ContentView mounts, the user has
+        // already picked a song — `project` will be set via
+        // `handleSongPicked` if `loaded` is empty server-side. For returning
+        // users, take the most recent project from the server.
+        if !loaded.isEmpty {
+            self.project = loaded.first
+        }
         await store.loadProducts()
     }
 
+    // MARK: - Project switcher
+
+    func openProjects() { presentingProjects = true }
+
+    /// Tapped a project in the projects sheet. Resets in-memory state and
+    /// switches the active project. Server-side re-fetch of historical
+    /// generations is a future task — switching to an old project starts
+    /// with an empty grid the user keeps adding to.
+    func switchToProject(_ p: Project) {
+        guard p.id != project?.id else {
+            presentingProjects = false
+            return
+        }
+        withAnimation(.spring(duration: 0.4)) {
+            self.project = p
+            self.images = []
+            self.videos = []
+            self.pendingImages = []
+            self.pendingVideos = []
+            self.pendingGenerations = []
+            self.lyrics = nil
+            self.audiolines = nil
+            self.selectedImageIds = []
+            self.isSelectingForVideo = false
+            self.phase = .grid
+            self.presentingProjects = false
+        }
+    }
+
+    /// Tapped "+" in the projects sheet. Dismiss the sheet first so we don't
+    /// stack sheets, then present SongView.
+    func openNewSong() {
+        presentingProjects = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.presentingNewSong = true
+        }
+    }
+
+    /// SongView completed. The upload + project upsert happened inside
+    /// SongView itself — refetch projects and select the most recent.
+    func handleSongPicked() {
+        presentingNewSong = false
+        Task { [weak self] in
+            guard let self else { return }
+            let loaded = (try? await self.service.allProjects()) ?? []
+            await MainActor.run {
+                withAnimation(.spring(duration: 0.4)) {
+                    self.allProjects = loaded
+                    if let newest = loaded.first {
+                        self.project = newest
+                    }
+                    self.images = []
+                    self.videos = []
+                    self.pendingImages = []
+                    self.pendingVideos = []
+                    self.pendingGenerations = []
+                    self.lyrics = nil
+                    self.audiolines = nil
+                    self.selectedImageIds = []
+                    self.isSelectingForVideo = false
+                    self.phase = .onboarding
+                }
+            }
+        }
+    }
+
     // Onboarding — kinetic is a single beat; advancing means we're done.
-    func finishOnboarding() { phase = .startCta }
+    func finishOnboarding() { phase = .grid }
 
     // Start (first generation). Always opens the consent sheet the first time.
 
@@ -950,7 +1119,7 @@ private final class GenerateViewModel {
             tutorialMoment = .tapImageToDerive
         } catch {
             errorMessage = error.localizedDescription
-            phase = .startCta
+            phase = .grid
         }
     }
 
@@ -1307,6 +1476,15 @@ private struct AuthorizedImage: View {
     }
 
     private func load() async {
+        // Dev seed bundle short-circuit: when `devSeedEnabled` is true and
+        // the filename has no path component (e.g. "90.png"), check the app
+        // bundle first. Avoids a network round-trip for stand-in images and
+        // is gated on the flag so production behavior is unaffected.
+        if devSeedEnabled, !filename.contains("/"),
+           let bundled = bundledPreviewImage {
+            await MainActor.run { self.image = bundled }
+            return
+        }
         guard let url = Media.url(filename) else { failed = true; return }
         var req = URLRequest(url: url)
         for (k, v) in Media.authHeaders { req.setValue(v, forHTTPHeaderField: k) }
@@ -1500,6 +1678,145 @@ private struct VideoDetailView: View {
     }
 }
 
+// MARK: - Projects sheet (switch song / new song)
+
+/// Opens from the principal toolbar switcher. Lists the user's projects;
+/// tap a row to switch, "+" presents Song.swift to create a new project.
+private struct ProjectsSheet: View {
+    @Bindable var viewModel: GenerateViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.background.ignoresSafeArea()
+                cardPager
+            }
+            .navigationTitle("Your songs")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                        .foregroundStyle(Theme.muted)
+                }
+            }
+            .toolbarBackground(Theme.background, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+        }
+    }
+
+    /// Vertical paged card stack. Each project is its own full-bleed card;
+    /// the final card is "New song" — same gesture, same surface, no separate
+    /// + button. Swipe up/down to switch between cards.
+    @ViewBuilder
+    private var cardPager: some View {
+        GeometryReader { geo in
+            ScrollView(.vertical, showsIndicators: false) {
+                LazyVStack(spacing: 0) {
+                    ForEach(viewModel.allProjects, id: \.id) { project in
+                        projectCard(project, size: geo.size)
+                            .frame(width: geo.size.width, height: geo.size.height)
+                    }
+                    newSongCard(size: geo.size)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                }
+                .scrollTargetLayout()
+            }
+            .scrollTargetBehavior(.paging)
+        }
+    }
+
+    @ViewBuilder
+    private func projectCard(_ project: Project, size: CGSize) -> some View {
+        let isCurrent = project.id == viewModel.project?.id
+        let h = abs(project.id.hashValue)
+        let cardWidth = size.width - 48
+        let cardHeight = size.height - 80
+
+        Button {
+            viewModel.switchToProject(project)
+        } label: {
+            VStack(spacing: 0) {
+                ZStack(alignment: .bottomLeading) {
+                    LinearGradient(
+                        colors: [
+                            Color(hue: Double(h % 360) / 360, saturation: 0.75, brightness: 0.6),
+                            Color(hue: Double((h / 360) % 360) / 360, saturation: 0.85, brightness: 0.35),
+                        ],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
+                    )
+                    LinearGradient(
+                        colors: [.clear, .black.opacity(0.55)],
+                        startPoint: .center, endPoint: .bottom
+                    )
+                    VStack(alignment: .leading, spacing: 6) {
+                        if isCurrent {
+                            HStack(spacing: 4) {
+                                Image(systemName: "checkmark.circle.fill")
+                                Text("Now")
+                            }
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Theme.accentMagenta)
+                        }
+                        Text(project.summary.isEmpty
+                             ? (project.audio as NSString).deletingPathExtension
+                             : project.summary)
+                            .font(.system(size: 40, weight: .heavy))
+                            .foregroundStyle(.white)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.6)
+                        Text((project.audio as NSString).lastPathComponent)
+                            .font(.footnote)
+                            .foregroundStyle(.white.opacity(0.75))
+                            .lineLimit(1)
+                    }
+                    .padding(24)
+                }
+                .frame(width: cardWidth, height: cardHeight)
+                .clipShape(.rect(cornerRadius: 28))
+                .shadow(color: .black.opacity(0.4), radius: 20, y: 10)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func newSongCard(size: CGSize) -> some View {
+        let cardWidth = size.width - 48
+        let cardHeight = size.height - 80
+
+        Button(action: viewModel.openNewSong) {
+            VStack(spacing: 18) {
+                ZStack {
+                    Circle()
+                        .fill(Theme.accent)
+                        .frame(width: 96, height: 96)
+                        .shadow(color: Theme.accentMagenta.opacity(0.5),
+                                radius: 24, y: 8)
+                    Image(systemName: "plus")
+                        .font(.system(size: 44, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+                Text("New song")
+                    .font(.title.bold())
+                    .foregroundStyle(Theme.onSurface)
+                Text("Start a fresh production.")
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.muted)
+            }
+            .frame(width: cardWidth, height: cardHeight)
+            .background(Theme.surface, in: .rect(cornerRadius: 28))
+            .overlay(
+                RoundedRectangle(cornerRadius: 28)
+                    .stroke(Theme.accentMagenta.opacity(0.3), style: StrokeStyle(lineWidth: 2, dash: [8]))
+            )
+            .shadow(color: .black.opacity(0.3), radius: 20, y: 10)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 // MARK: - Lyric paste sheet
 
 /// Surfaces on first scene playback (`audiolines == nil`). User pastes their
@@ -1657,7 +1974,9 @@ private struct CreditChip: View {
 
 // MARK: - ContentView
 
-struct ContentView: View {
+struct Generate: View {
+    var onContinue: () -> Void
+
     @State private var viewModel = GenerateViewModel()
     @State private var photoPickerItem: PhotosPickerItem?
 
@@ -1688,6 +2007,14 @@ struct ContentView: View {
                     viewModel.viewingVideo = nil
                 }
             }
+            .sheet(isPresented: $viewModel.presentingProjects) {
+                ProjectsSheet(viewModel: viewModel)
+                    .presentationDetents([.large])
+                    .presentationBackground(.regularMaterial)
+            }
+            .fullScreenCover(isPresented: $viewModel.presentingNewSong) {
+                SongView(onComplete: { _ in viewModel.handleSongPicked() })
+            }
         }
         .preferredColorScheme(.dark)
         .task { await viewModel.bootstrap() }
@@ -1709,8 +2036,6 @@ struct ContentView: View {
         case .onboarding:
             KineticOnboardingView(onComplete: viewModel.finishOnboarding)
                 .task { viewModel.onboardingAudio.start(resource: "onboarding", ext: "wav") }
-        case .startCta:
-            StartCtaView(onStart: viewModel.tapStart)
         case .generating(let kind):
             GeneratingOverlay(kind: kind)
         case .grid, .derive:
@@ -1779,10 +2104,21 @@ struct ContentView: View {
                     }
                 }
             }
+            // Project switcher: tap song name → ProjectsSheet. Always renders
+            // so the principal slot is never empty.
             ToolbarItem(placement: .principal) {
-                if viewModel.hasGivenConsent, let c = viewModel.credit {
-                    CreditChip(credits: c.credits, isLoading: viewModel.loadingBalance)
+                Button(action: viewModel.openProjects) {
+                    HStack(spacing: 6) {
+                        Text(viewModel.project.map { projectTitle($0) } ?? "Generate")
+                            .font(.headline)
+                            .foregroundStyle(Theme.onSurface)
+                            .lineLimit(1)
+                        Image(systemName: "chevron.down")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(Theme.muted)
+                    }
                 }
+                .buttonStyle(.plain)
             }
             ToolbarItem(placement: .topBarTrailing) {
                 if shouldShowMakeVideoButton {
@@ -1806,6 +2142,22 @@ struct ContentView: View {
         return false
     }
 
+    /// Toolbar chrome (switcher, credit chip, Make Video) only appears on
+    /// the grid. Splash / startCta / generating overlay / completion stay
+    /// chrome-free.
+    private var shouldShowGridChrome: Bool {
+        if case .grid = viewModel.phase { return true }
+        return false
+    }
+
+    private func projectTitle(_ p: Project) -> String {
+        let s = p.summary.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !s.isEmpty { return s }
+        let audioBase = (p.audio as NSString).lastPathComponent
+        let stripped = (audioBase as NSString).deletingPathExtension
+        return stripped.isEmpty ? "Untitled song" : stripped
+    }
+
     /// Only show Make Video in the toolbar when the user is on the grid (not derive, etc.).
     private var shouldShowMakeVideoButton: Bool {
         if case .grid = viewModel.phase { return true }
@@ -1821,41 +2173,6 @@ struct ContentView: View {
 
 }
 
-#Preview { ContentView().preferredColorScheme(.dark) }
-
-// MARK: - Start CTA
-
-private struct StartCtaView: View {
-    let onStart: () -> Void
-    @State private var pulse = false
-    var body: some View {
-        VStack(spacing: 32) {
-            Spacer()
-            ZStack {
-                Circle()
-                    .fill(Theme.accentMagenta.opacity(pulse ? 0.35 : 0.15))
-                    .frame(width: pulse ? 240 : 180, height: pulse ? 240 : 180)
-                    .blur(radius: 30)
-                Image(systemName: "sparkles")
-                    .font(.system(size: 64, weight: .bold))
-                    .foregroundStyle(Theme.accent)
-            }
-            Text("Ready?")
-                .font(.largeTitle.bold())
-                .foregroundStyle(Theme.onSurface)
-            Spacer()
-            Button("Tap to begin", action: onStart)
-                .buttonStyle(AccentButtonStyle())
-                .padding(.horizontal, 24).padding(.bottom, 48)
-        }
-        .background(Theme.background.ignoresSafeArea())
-        .onAppear {
-            withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) {
-                pulse = true
-            }
-        }
-    }
-}
 
 // MARK: - Kinetic onboarding sandbox
 //
@@ -2083,237 +2400,7 @@ private struct KineticOnboardingView: View {
     }
 }
 
-#Preview("Onboarding") {
-    KineticOnboardingView(onComplete: {})
-        .preferredColorScheme(.dark)
-}
 
-// Shows the "held + headline landed" composition (i.e. how the screen looks
-// after the burst settles). Uses the reduce-motion code path which is identical
-// to the held state — no TimelineView animation.
-#Preview("Onboarding — Held") {
-    KineticOnboardingView(onComplete: {}, forcedHeld: true)
-        .preferredColorScheme(.dark)
-}
-// MARK: - GridView preview
-
-#Preview("Grid") {
-    @Previewable @State var vm: GenerateViewModel = {
-        let vm = GenerateViewModel()
-        vm.phase = .grid
-        // Sample images dropped into the project for preview use.
-        let sampleFiles = [
-            "019e7f3d-7bff-7901-ac73-8c7372b56330.png",
-            "019e7f3d-a3c0-7e63-a239-d84846529654.png",
-            "019e7f3d-aa21-7173-86ae-fbe8d61d0a84.png",
-        ]
-        vm.images = (0..<12).map { i in
-            GeneratedImage(
-                id: UUID(),
-                file: sampleFiles[i % sampleFiles.count],
-                prompt: "Preview prompt \(i)",
-                source: [.lyra, .vega, .luna][i % 3]
-            )
-        }
-        // Heart a few so the Liked filter has content.
-        for i in [1, 4, 7] { vm.likeStore.toggle(vm.images[i].id) }
-        return vm
-    }()
-
-    NavigationStack {
-        GridView(viewModel: vm)
-            .background(Theme.background.ignoresSafeArea())
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("Preview").foregroundStyle(Theme.muted)
-                }
-            }
-    }
-    .preferredColorScheme(.dark)
-}
-
-#Preview("Grid — Liked filter") {
-    @Previewable @State var vm: GenerateViewModel = {
-        let vm = GenerateViewModel()
-        vm.phase = .grid
-        vm.filter = .liked
-        let sampleFiles = [
-            "019e7f3d-7bff-7901-ac73-8c7372b56330.png",
-            "019e7f3d-a3c0-7e63-a239-d84846529654.png",
-            "019e7f3d-aa21-7173-86ae-fbe8d61d0a84.png",
-        ]
-        vm.images = (0..<6).map { i in
-            GeneratedImage(
-                id: UUID(),
-                file: sampleFiles[i % sampleFiles.count],
-                prompt: "Preview prompt \(i)",
-                source: [.lyra, .vega, .luna][i % 3]
-            )
-        }
-        for img in vm.images { vm.likeStore.toggle(img.id) }
-        return vm
-    }()
-
-    NavigationStack {
-        GridView(viewModel: vm)
-            .background(Theme.background.ignoresSafeArea())
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("Liked").foregroundStyle(Theme.muted)
-                }
-            }
-    }
-    .preferredColorScheme(.dark)
-}
-
-#Preview("Grid — Select mode") {
-    @Previewable @State var vm: GenerateViewModel = {
-        let vm = GenerateViewModel()
-        vm.phase = .grid
-        let sampleFiles = ["img1.png", "img2.png", "img3.png", "img4.png"]
-        let images: [GeneratedImage] = (0..<8).map { i in
-            GeneratedImage(
-                id: UUID(),
-                file: sampleFiles[i % sampleFiles.count],
-                prompt: "Preview prompt \(i)",
-                source: [.lyra, .vega, .luna][i % 3]
-            )
-        }
-        vm.images = images
-        // Heart half of them — non-hearted ones will dim in select mode.
-        for i in [0, 2, 4, 6] { vm.likeStore.toggle(images[i].id) }
-        vm.isSelectingForVideo = true
-        vm.selectedImageIds = [images[0].id, images[4].id]
-        return vm
-    }()
-
-    NavigationStack {
-        GridView(viewModel: vm)
-            .background(Theme.background.ignoresSafeArea())
-            .navigationTitle("\(vm.selectedImageIds.count) of 3 picked")
-            .navigationBarTitleDisplayMode(.inline)
-    }
-    .preferredColorScheme(.dark)
-}
-
-#Preview("Grid — Sectioned by line") {
-    @Previewable @State var vm: GenerateViewModel = {
-        let vm = GenerateViewModel()
-        vm.phase = .grid
-        // 8 lyric lines as if `pasteLyrics` ran.
-        let sampleLines = [
-            "I never thought I'd see the day",
-            "When you came back into my life",
-            "All the words I couldn't say",
-            "Echo through the city lights",
-            "Holding on to what we had",
-            "Letting go of everything",
-            "Maybe love was never sad",
-            "Maybe this is the beginning",
-        ]
-        vm.audiolines = sampleLines.enumerated().map { idx, text in
-            SongLine(id: UUID(), index: idx, text: text,
-                     startMs: idx * 6_000, durationMs: 6_000)
-        }
-        // Tag some images with line indices, leave a few sections empty
-        // (lines 3 and 6) so the ghost row shows.
-        let sampleFiles = [
-            "019e7f3d-7bff-7901-ac73-8c7372b56330.png",
-            "019e7f3d-a3c0-7e63-a239-d84846529654.png",
-            "019e7f3d-aa21-7173-86ae-fbe8d61d0a84.png",
-            "90.png", "91.png", "93.png",
-        ]
-        let coverage: [Int: Int] = [0: 3, 1: 2, 2: 6, 4: 3, 5: 1, 7: 4]
-        var images: [GeneratedImage] = []
-        var fileCursor = 0
-        for (lineIdx, count) in coverage.sorted(by: { $0.key < $1.key }) {
-            for _ in 0..<count {
-                images.append(GeneratedImage(
-                    id: UUID(),
-                    file: sampleFiles[fileCursor % sampleFiles.count],
-                    prompt: "Preview prompt",
-                    source: [.lyra, .vega, .luna][fileCursor % 3],
-                    lineIndex: lineIdx
-                ))
-                fileCursor += 1
-            }
-        }
-        vm.images = images
-        return vm
-    }()
-
-    NavigationStack {
-        GridView(viewModel: vm)
-            .background(Theme.background.ignoresSafeArea())
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("Sectioned").foregroundStyle(Theme.muted)
-                }
-            }
-    }
-    .preferredColorScheme(.dark)
-}
-
-#Preview("Grid — Pending generations in sections") {
-    @Previewable @State var vm: GenerateViewModel = {
-        let vm = GenerateViewModel()
-        vm.phase = .grid
-        let sampleLines = [
-            "I never thought I'd see the day",
-            "When you came back into my life",
-            "All the words I couldn't say",
-            "Echo through the city lights",
-        ]
-        vm.audiolines = sampleLines.enumerated().map { idx, text in
-            SongLine(id: UUID(), index: idx, text: text,
-                     startMs: idx * 6_000, durationMs: 6_000)
-        }
-        let sampleFiles = [
-            "019e7f3d-7bff-7901-ac73-8c7372b56330.png",
-            "019e7f3d-a3c0-7e63-a239-d84846529654.png",
-            "019e7f3d-aa21-7173-86ae-fbe8d61d0a84.png",
-        ]
-        vm.images = (0..<6).map { i in
-            GeneratedImage(
-                id: UUID(),
-                file: sampleFiles[i % sampleFiles.count],
-                prompt: "Preview prompt",
-                source: [.lyra, .vega, .luna][i % 3],
-                lineIndex: i / 3  // Half in line 0, half in line 1.
-            )
-        }
-        // Line 2 mid-generation (shimmer cells), line 3 untouched.
-        vm.pendingGenerations = (0..<3).map { _ in
-            PendingGeneration(id: UUID(), lineIndex: 2)
-        }
-        return vm
-    }()
-
-    NavigationStack {
-        GridView(viewModel: vm)
-            .background(Theme.background.ignoresSafeArea())
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("In-flight").foregroundStyle(Theme.muted)
-                }
-            }
-    }
-    .preferredColorScheme(.dark)
-}
-
-#Preview("Grid — Empty") {
-    @Previewable @State var vm: GenerateViewModel = {
-        let vm = GenerateViewModel()
-        vm.phase = .grid
-        return vm
-    }()
-
-    NavigationStack {
-        GridView(viewModel: vm)
-            .background(Theme.background.ignoresSafeArea())
-    }
-    .preferredColorScheme(.dark)
-}
 
 // MARK: - Generating overlay
 
@@ -3157,3 +3244,22 @@ private struct CompletionView: View {
     }
 }
 
+
+// MARK: - JWT
+
+private func jwtSub() -> String? {
+    guard let token = UserDefaults.standard.string(forKey: "idToken") else { return nil }
+    let parts = token.split(separator: ".")
+    guard parts.count >= 2 else { return nil }
+    var payload = String(parts[1])
+        .replacingOccurrences(of: "-", with: "+")
+        .replacingOccurrences(of: "_", with: "/")
+    let pad = (4 - payload.count % 4) % 4
+    payload.append(String(repeating: "=", count: pad))
+    guard
+        let data = Data(base64Encoded: payload),
+        let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+        let sub = json["sub"] as? String
+    else { return nil }
+    return sub
+}

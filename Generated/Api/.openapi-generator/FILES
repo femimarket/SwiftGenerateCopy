@@ -62,6 +62,7 @@ Sources/Api/Models/ApplePayDelete.swift
 Sources/Api/Models/ApplePayPaginate.swift
 Sources/Api/Models/ApplePaySearch.swift
 Sources/Api/Models/ApplePayServerRequest.swift
+Sources/Api/Models/ApplePayStatus.swift
 Sources/Api/Models/ApplePayUpdate.swift
 Sources/Api/Models/ApplePayUpdateItem.swift
 Sources/Api/Models/ApplePayUpsert.swift
@@ -306,6 +307,7 @@ docs/ApplePayPaginate.md
 docs/ApplePayRouteAPI.md
 docs/ApplePaySearch.md
 docs/ApplePayServerRequest.md
+docs/ApplePayStatus.md
 docs/ApplePayUpdate.md
 docs/ApplePayUpdateItem.md
 docs/ApplePayUpsert.md

@@ -96,7 +96,6 @@ open class LyricSyncRouteAPI {
         if let value = update { appendBracket(into: &localVariableParameters, baseName: "update", value: value) }
         if let value = upsert { appendBracket(into: &localVariableParameters, baseName: "upsert", value: value) }
         appendBracket(into: &localVariableParameters, baseName: "user_id", value: userId)
-        localVariableParameters["__form_file_fields"] = ["audio"]
         
 
         let localVariableUrlComponents = URLComponents(string: localVariableURLString)

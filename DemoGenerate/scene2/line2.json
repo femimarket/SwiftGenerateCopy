@@ -1,0 +1,42 @@
+[
+  {
+    "id": 0,
+    "text": "[nigerian]",
+    "startMs": 320,
+    "context": null,
+    "goal": null,
+    "themes": []
+  },
+  {
+    "id": 1,
+    "text": "I don't care",
+    "startMs": 10060,
+    "context": "I don't care about winning anymore. Flexing success or being in the race.",
+    "goal": "Unphased by life",
+    "themes": []
+  },
+  {
+    "id": 2,
+    "text": "You can win I don't care",
+    "startMs": 11500,
+    "context": null,
+    "goal": null,
+    "themes": []
+  },
+  {
+    "id": 3,
+    "text": "The scars on my heart, are really rare",
+    "startMs": 13520,
+    "context": null,
+    "goal": null,
+    "themes": []
+  },
+  {
+    "id": 4,
+    "text": "[european portuguese]",
+    "startMs": 15780,
+    "context": null,
+    "goal": null,
+    "themes": []
+  }
+]
