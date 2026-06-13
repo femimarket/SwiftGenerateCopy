@@ -3,7 +3,7 @@
 //  Generate
 //
 //  Single-file flagship Generate screen.
-//  Tutorial wizard: onboarding → start CTA → grid → derive → like → compose video → done.
+//  Grid → derive → like → compose video → done.
 //
 
 import SwiftUI
@@ -14,56 +14,89 @@ import Observation
 import FoundationModels
 import Api
 
-// MARK: - Routing
+// MARK: - Pending action (derive-mode init payload)
 
-/// Stack-driven app navigation. `ContentView` owns the path; `Generate` and
-/// the derive destination push/pop these cases as the user moves.
-enum AppRoute: Hashable {
-    /// Push the GenerateNew ("Change it") screen for the source image with this filename.
-    case derive(String)
-    /// Push a Generate destination with a generation intent — the destination
-    /// view fires the upsert + poll for that action on appear.
-    case generate(GenerateAction)
-}
-
-/// Generation intents handed to a pushed Generate destination via routing.
-enum GenerateAction: Hashable {
-    /// User submitted a "tell me what to change" prompt for `filename`.
-    case deriveImage(text: String, filename: String)
+/// Internal carrier for derive-mode arguments. Never crosses the public API —
+/// the parent app passes `filename` and `tweak` as flat init parameters, we
+/// pack them here for the view layer.
+struct PendingAction {
+    let filename: String
+    let tweak: String
 }
 
 // MARK: - App root
 
-/// Root view of the Generate2 app. Takes a tokenid from the parent app (or
-/// the hardcoded dev token in standalone runs) and installs it as the API
-/// bearer before any route fires.
-struct ContentView: View {
+/// Root view of the Generate2 library. Two modes:
+/// - **Normal**: shows the grid + chrome. When the user taps an image, fires
+///   `onImageTapped(path)` with the full on-disk path — the parent owns the
+///   NavigationStack and decides what to push (their team's "Change it"
+///   view). Parent gets server filename via `URL(fileURLWithPath:).lastPathComponent`.
+/// - **Derive**: parent pushed Generate2 with a `filename` + `tweak`. On
+///   appear, runs the derive pipeline (chat enrich → 3-model batch) and the
+///   grid fills with the results.
+///
+/// Generate2 does not own a NavigationStack and emits no internal routes.
+public struct ContentView: View {
     let tokenid: String
-    /// Parent app's topup handler. Generate2 calls this when credits are
-    /// insufficient; the parent shows its own purchase UI and resolves true
-    /// on success, false on cancel/failure. Default = no topup available.
+    /// Parent app's topup handler. Awaited by the credit gate when balance
+    /// runs dry — parent shows its purchase UI, resolves true on success.
     let onTopupNeeded: () async -> Bool
-    @State private var path: [AppRoute] = []
+    /// Fired when the user taps an image in the grid. Parent receives the
+    /// full on-disk path of the tapped image and pushes its own derive screen
+    /// onto its NavigationStack.
+    let onImageTapped: (_ path: String) -> Void
+    /// Fired when the user taps the song-title slot in the toolbar. Parent
+    /// presents its own song-picker sheet (audio import / library / etc.).
+    let onUploadSong: () -> Void
+    /// Set only in derive mode. View runs this action on appear.
+    let pendingAction: PendingAction?
 
-    init(tokenid: String, onTopupNeeded: @escaping () async -> Bool = { false }) {
+    /// Normal mode. Use as the initial Generate2 entry on the parent's stack.
+    public init(
+        tokenid: String,
+        onTopupNeeded: @escaping () async -> Bool,
+        onImageTapped: @escaping (String) -> Void,
+        onUploadSong: @escaping () -> Void
+    ) {
         self.tokenid = tokenid
         self.onTopupNeeded = onTopupNeeded
+        self.onImageTapped = onImageTapped
+        self.onUploadSong = onUploadSong
+        self.pendingAction = nil
+        Self.installBearer(tokenid)
+    }
+
+    /// Derive mode. Parent pushes this onto its stack after the team's
+    /// "Change it" view collected a tweak for `filename`. Generate2 fires
+    /// the derive pipeline on appear; the grid fills with the new images.
+    public init(
+        tokenid: String,
+        onTopupNeeded: @escaping () async -> Bool,
+        onImageTapped: @escaping (String) -> Void,
+        onUploadSong: @escaping () -> Void,
+        filename: String,
+        tweak: String
+    ) {
+        self.tokenid = tokenid
+        self.onTopupNeeded = onTopupNeeded
+        self.onImageTapped = onImageTapped
+        self.onUploadSong = onUploadSong
+        self.pendingAction = PendingAction(filename: filename, tweak: tweak)
+        Self.installBearer(tokenid)
+    }
+
+    private static func installBearer(_ tokenid: String) {
         UserDefaults.standard.set(tokenid, forKey: "idToken")
         ApiAPIConfiguration.shared.customHeaders["Authorization"] = "Bearer \(tokenid)"
     }
 
-    var body: some View {
-        NavigationStack(path: $path) {
-            Generate(appPath: $path, action: nil, onTopupNeeded: onTopupNeeded)
-                .navigationDestination(for: AppRoute.self) { route in
-                    switch route {
-                    case .derive(let filename):
-                        GenerateNew(filename: filename, path: $path)
-                    case .generate(let action):
-                        Generate(appPath: $path, action: action, onTopupNeeded: onTopupNeeded)
-                    }
-                }
-        }
+    public var body: some View {
+        Generate(
+            onTopupNeeded: onTopupNeeded,
+            onImageTapped: onImageTapped,
+            onUploadSong: onUploadSong,
+            pendingAction: pendingAction
+        )
     }
 }
 
@@ -244,7 +277,7 @@ private enum FemiApiRoute {
     }
 }
 
-// MARK: - Derive prompt (GenerateNew → Generate route; not FemiGenerateAPI)
+// MARK: - Derive prompt (LLM-enriched seed for derive mode; not FemiGenerateAPI)
 
 private enum DerivePrompt {
     private static let max = 400
@@ -482,78 +515,6 @@ struct FemiGenerateAPI: Sendable {
     }
 }
 
-// MARK: - Onboarding audio (app-scoped, primed at launch)
-
-/// App-scoped singleton. `prepare(...)` runs the heavy work (bundle URL
-/// lookup, decode, prepareToPlay) off-main. Call it once at launch — by the
-/// time the splash appears the player is sitting ready. `start()` is the hot
-/// path: no I/O, just `play()` on main. Per engine: heavy work runs detached,
-/// then hands off — the interactive moment never blocks on I/O.
-@MainActor @Observable
-final class FemiOnboardingAudio {
-    static let shared = FemiOnboardingAudio()
-
-    private var player: AVAudioPlayer?
-    private var hasStarted = false
-    private var preparing = false
-
-    private init() {}
-
-    /// Idempotent. Loads + decodes the WAV off-main. Safe to call repeatedly.
-    func prepare(resource: String, ext: String) {
-        guard player == nil, !preparing else { return }
-        preparing = true
-        Task.detached(priority: .userInitiated) { [weak self] in
-            guard let url = Bundle.main.url(forResource: resource, withExtension: ext)
-            else {
-                await MainActor.run { [weak self] in self?.preparing = false }
-                return
-            }
-            do {
-                let p = try AVAudioPlayer(contentsOf: url)
-                p.numberOfLoops = 0
-                p.volume = 0
-                p.prepareToPlay()
-                await MainActor.run { [weak self] in
-                    guard let self else { return }
-                    self.player = p
-                    self.preparing = false
-                }
-            } catch {
-                await MainActor.run { [weak self] in self?.preparing = false }
-            }
-        }
-    }
-
-    /// Splash mount calls this. Player is always primed by app-launch
-    /// `prepare(...)` — by the time the user picks a song, previews it, and
-    /// taps "Use this song", prepare has finished. Just session-activate + play().
-    func start(resource _: String, ext _: String) {
-        guard !hasStarted, let p = player else { return }
-        hasStarted = true
-        try? AVAudioSession.sharedInstance().setCategory(
-            .ambient, mode: .default, options: [.mixWithOthers]
-        )
-        try? AVAudioSession.sharedInstance().setActive(true)
-        p.play()
-        p.setVolume(0.6, fadeDuration: 0.3)
-    }
-
-    /// Cross-fades to silence over `duration` seconds, then releases the session.
-    /// Idempotent — calling again after a fade is in flight is a no-op.
-    func fadeOut(duration: TimeInterval = 0.6) {
-        guard let p = player else { return }
-        p.setVolume(0, fadeDuration: Float(duration) > 0 ? duration : 0.001)
-        let delay = max(duration, 0)
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            self?.player?.stop()
-            self?.player = nil
-            try? AVAudioSession.sharedInstance().setActive(false,
-                options: [.notifyOthersOnDeactivation])
-        }
-    }
-}
-
 // MARK: - Local store (UploadSong filename for toolbar)
 //
 // `UploadSong` → actual audio filename saved under Documents/<Project>/.
@@ -595,10 +556,8 @@ final class FemiGenerateViewModel {
     enum GenerationKind: Hashable { case initial, derived, video }
 
     enum Phase: Hashable {
-        case onboarding
         case generating(GenerationKind)
         case grid
-        case derive(image: FemiGeneratedImage)
         case complete
     }
 
@@ -656,7 +615,6 @@ final class FemiGenerateViewModel {
     var audiolines: [FemiSongLine]?
 
     let likeStore = FemiLikeStore()
-    let onboardingAudio = FemiOnboardingAudio.shared
     private let service = FemiGenerateAPI()  // renamed from GenerateService to avoid DemoGenerate.swift collision
 
     init() {
@@ -994,22 +952,16 @@ final class FemiGenerateViewModel {
                     self.audiolines = nil
                     self.selectedImageIds = []
                     self.isSelectingForVideo = false
-                    self.phase = .onboarding
+                    self.phase = .grid
                 }
             }
         }
     }
 
-    // Onboarding — kinetic is a single beat; advancing means we're done.
-    func finishOnboarding() { phase = .grid }
-
     // Start (first generation). Terms screen upstream owns cost disclosure;
     // we fire generation directly.
 
     func tapStart() {
-        // Fade the onboarding WAV out as the user transitions away from the
-        // onboarding/Ready beat. Idempotent if it's already stopped.
-        onboardingAudio.fadeOut(duration: 0.6)
         Task { await performInitialGeneration() }
     }
 
@@ -1082,7 +1034,20 @@ final class FemiGenerateViewModel {
 
     // Derive
 
-    func openDerive(_ image: FemiGeneratedImage) { phase = .derive(image: image) }
+    /// User tapped an image in the grid. Generate2 no longer owns the derive
+    /// destination — fire the parent's callback with the full on-disk path so
+    /// the parent can push its team's "Change it" view onto its own stack.
+    func openDerive(_ image: FemiGeneratedImage) {
+        ProjectService.ensureCurrentProject()
+        let path = ProjectService.documents
+            .appendingPathComponent(ProjectService.current!)
+            .appendingPathComponent(image.file)
+            .path
+        onImageTapped?(path)
+    }
+
+    /// Parent-supplied image-tap callback. Set by `Generate` on appear.
+    var onImageTapped: ((String) -> Void)?
 
     /// Set by `tapInitialFromMenu()` (or seeded externally). Consumed inside
     /// `performInitialGeneration` so the first batch uses the user's words
@@ -1108,9 +1073,10 @@ final class FemiGenerateViewModel {
         withAnimation { pendingGenerations.removeAll { $0.id == id } }
     }
 
-    /// Upsert a three-model batch from a GenerateNew route action, then poll
-    /// each server `request_id` and swap shimmers for images as they land.
-    func runGenerateAction(_ action: GenerateAction) async {
+    /// Upsert a three-model batch as a derivative of `filename` + `tweak`,
+    /// then poll each server `request_id` and swap shimmers for images as
+    /// they land.
+    func runDerive(text: String, filename: String) async {
         let pendings = (0..<3).map { _ in
             FemiPendingGeneration(id: UUID(), lineIndex: nil)
         }
@@ -1120,11 +1086,8 @@ final class FemiGenerateViewModel {
 
         let prompt: String
         do {
-            switch action {
-            case .deriveImage(let text, let filename):
-                let prior = ProjectService.getPrompt(filename) ?? ""
-                prompt = try await DerivePrompt.enrich(prior: prior, tweak: text)
-            }
+            let prior = ProjectService.getPrompt(filename) ?? ""
+            prompt = try await DerivePrompt.enrich(prior: prior, tweak: text)
         } catch {
             for p in pendings {
                 if let i = pendingGenerations.firstIndex(where: { $0.id == p.id }) {
@@ -1645,14 +1608,6 @@ private struct VideoDetailView: View {
         }
         .task { setupPlayback() }
         .onDisappear { teardownPlayback() }
-        .sheet(isPresented: $presentingLyricPaste) {
-            LyricPasteSheet(
-                save: { text in viewModel.pasteLyrics(text) },
-                onClose: { presentingLyricPaste = false }
-            )
-            .presentationDetents([.large])
-            .presentationBackground(.regularMaterial)
-        }
     }
 
     /// Revelation moment: subtle affordance offering lyric overlay + perfect
@@ -1712,246 +1667,9 @@ private struct VideoDetailView: View {
     private func teardownPlayback() {
         player?.pause()
         player = nil
-        // Restore ambient session so onboarding WAV behaves politely on next launch.
         try? AVAudioSession.sharedInstance().setCategory(
             .ambient, mode: .default, options: [.mixWithOthers]
         )
-    }
-}
-
-// MARK: - Projects sheet (switch song / new song)
-
-/// Opens from the principal toolbar switcher. Lists the user's projects;
-/// tap a row to switch, "+" presents Song.swift to create a new project.
-private struct ProjectsSheet: View {
-    @Bindable var viewModel: FemiGenerateViewModel
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                FemiTheme.background.ignoresSafeArea()
-                cardPager
-            }
-            .navigationTitle("Your songs")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
-                        .foregroundStyle(FemiTheme.muted)
-                }
-            }
-            .toolbarBackground(FemiTheme.background, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
-        }
-    }
-
-    /// Vertical paged card stack. Each project is its own full-bleed card;
-    /// the final card is "New song" — same gesture, same surface, no separate
-    /// + button. Swipe up/down to switch between cards.
-    @ViewBuilder
-    private var cardPager: some View {
-        GeometryReader { geo in
-            ScrollView(.vertical, showsIndicators: false) {
-                LazyVStack(spacing: 0) {
-                    ForEach(viewModel.allProjects, id: \.id) { project in
-                        projectCard(project, size: geo.size)
-                            .frame(width: geo.size.width, height: geo.size.height)
-                    }
-                    newSongCard(size: geo.size)
-                        .frame(width: geo.size.width, height: geo.size.height)
-                }
-                .scrollTargetLayout()
-            }
-            .scrollTargetBehavior(.paging)
-        }
-    }
-
-    @ViewBuilder
-    private func projectCard(_ project: Project, size: CGSize) -> some View {
-        let isCurrent = project.id == viewModel.project?.id
-        let h = abs(project.id.hashValue)
-        let cardWidth = size.width - 48
-        let cardHeight = size.height - 80
-
-        Button {
-            viewModel.switchToProject(project)
-        } label: {
-            VStack(spacing: 0) {
-                ZStack(alignment: .bottomLeading) {
-                    LinearGradient(
-                        colors: [
-                            Color(hue: Double(h % 360) / 360, saturation: 0.75, brightness: 0.6),
-                            Color(hue: Double((h / 360) % 360) / 360, saturation: 0.85, brightness: 0.35),
-                        ],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
-                    )
-                    LinearGradient(
-                        colors: [.clear, .black.opacity(0.55)],
-                        startPoint: .center, endPoint: .bottom
-                    )
-                    VStack(alignment: .leading, spacing: 6) {
-                        if isCurrent {
-                            HStack(spacing: 4) {
-                                Image(systemName: "checkmark.circle.fill")
-                                Text("Now")
-                            }
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(FemiTheme.accentMagenta)
-                        }
-                        Text(project.summary.isEmpty
-                             ? (project.audio as NSString).deletingPathExtension
-                             : project.summary)
-                            .font(.system(size: 40, weight: .heavy))
-                            .foregroundStyle(.white)
-                            .lineLimit(2)
-                            .minimumScaleFactor(0.6)
-                        Text((project.audio as NSString).lastPathComponent)
-                            .font(.footnote)
-                            .foregroundStyle(.white.opacity(0.75))
-                            .lineLimit(1)
-                    }
-                    .padding(24)
-                }
-                .frame(width: cardWidth, height: cardHeight)
-                .clipShape(.rect(cornerRadius: 28))
-                .shadow(color: .black.opacity(0.4), radius: 20, y: 10)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .buttonStyle(.plain)
-    }
-
-    @ViewBuilder
-    private func newSongCard(size: CGSize) -> some View {
-        let cardWidth = size.width - 48
-        let cardHeight = size.height - 80
-
-        Button(action: viewModel.openNewSong) {
-            VStack(spacing: 18) {
-                ZStack {
-                    Circle()
-                        .fill(FemiTheme.accent)
-                        .frame(width: 96, height: 96)
-                        .shadow(color: FemiTheme.accentMagenta.opacity(0.5),
-                                radius: 24, y: 8)
-                    Image(systemName: "plus")
-                        .font(.system(size: 44, weight: .bold))
-                        .foregroundStyle(.white)
-                }
-                Text("New song")
-                    .font(.title.bold())
-                    .foregroundStyle(FemiTheme.onSurface)
-                Text("Start a fresh production.")
-                    .font(.subheadline)
-                    .foregroundStyle(FemiTheme.muted)
-            }
-            .frame(width: cardWidth, height: cardHeight)
-            .background(FemiTheme.surface, in: .rect(cornerRadius: 28))
-            .overlay(
-                RoundedRectangle(cornerRadius: 28)
-                    .stroke(FemiTheme.accentMagenta.opacity(0.3), style: StrokeStyle(lineWidth: 2, dash: [8]))
-            )
-            .shadow(color: .black.opacity(0.3), radius: 20, y: 10)
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-// MARK: - Lyric paste sheet
-
-/// Surfaces on first scene playback (`audiolines == nil`). User pastes their
-/// own lyrics; on Save the sheet dismisses immediately. Per HIG: ideally
-/// content displays instantly, success doesn't need a confirmation banner,
-/// and only failures warrant an alert. Failures (when the real server call
-/// lands) will surface via `viewModel.errorMessage` → `.alert`, not in here.
-///
-/// Layout follows Apple's compose-sheet pattern (Mail, Reminders, Calendar):
-/// `NavigationStack` + toolbar buttons + a TextEditor that fills the body.
-/// SwiftUI's built-in keyboard avoidance plays nicely with this structure
-/// because it's the layout Apple designed for — no manual keyboard observer,
-/// no decorative chrome that crops when the keyboard rises. Brand is layered
-/// on top via the principal title, the gradient Save button, and a dark
-/// `FemiTheme.background` instead of the default sheet material.
-private struct LyricPasteSheet: View {
-    let save: (String) -> Void
-    let onClose: () -> Void
-
-    @State private var text: String = ""
-    @FocusState private var focused: Bool
-
-    private var trimmed: String {
-        text.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    var body: some View {
-        NavigationStack {
-            ZStack(alignment: .topLeading) {
-                FemiTheme.background.ignoresSafeArea()
-
-                TextEditor(text: $text)
-                    .focused($focused)
-                    .font(.body)
-                    .foregroundStyle(FemiTheme.onSurface)
-                    .scrollContentBackground(.hidden)
-                    .padding(.horizontal, 12)
-                    .padding(.top, 8)
-                    .tint(FemiTheme.accentMagenta)
-
-                if text.isEmpty {
-                    Text("Drop your lyrics here. One line at a time — the way your song breathes.")
-                        .font(.body.italic())
-                        .foregroundStyle(FemiTheme.muted)
-                        .padding(.horizontal, 17)
-                        .padding(.top, 16)
-                        .padding(.trailing, 24)
-                        .allowsHitTesting(false)
-                }
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "text.justify.left")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(FemiTheme.accent)
-                        Text("Your lyrics")
-                            .font(.headline)
-                            .foregroundStyle(FemiTheme.onSurface)
-                    }
-                }
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        focused = false
-                        onClose()
-                    }
-                    .foregroundStyle(FemiTheme.muted)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        focused = false
-                        save(trimmed)
-                        onClose()
-                    } label: {
-                        Text("Save")
-                            .font(.subheadline.weight(.bold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 6)
-                            .background(
-                                trimmed.isEmpty
-                                    ? AnyShapeStyle(Color.white.opacity(0.18))
-                                    : AnyShapeStyle(FemiTheme.accent)
-                            )
-                            .clipShape(.capsule)
-                    }
-                    .disabled(trimmed.isEmpty)
-                }
-            }
-            .toolbarBackground(FemiTheme.background, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
-        }
-        .onAppear { focused = true }
     }
 }
 
@@ -2013,132 +1731,23 @@ private struct CreditChip: View {
     }
 }
 
-// MARK: - GenerateNew (derive prompt input)
-
-/// Destination pushed for `.derive(filename)` route. User types a natural
-/// language change; submit forwards to `.generate(.deriveImage(...))` so
-/// the Generate destination runs the upsert + poll.
-struct GenerateNew: View {
-    let filename: String
-    @Binding var path: [AppRoute]
-    @State private var tweak: String = ""
-    @FocusState private var focused: Bool
-
-    private var trimmed: String {
-        tweak.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 12) {
-                FemiAuthorizedImage(filename: filename)
-                    .frame(width: 64, height: 64)
-                    .clipShape(.rect(cornerRadius: 12))
-                    .accessibilityLabel("Picture you tapped")
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("From this one")
-                        .font(.footnote)
-                        .foregroundStyle(FemiTheme.muted)
-                    Text("Tell me what to change")
-                        .font(.title3.bold())
-                        .foregroundStyle(FemiTheme.onSurface)
-                }
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-
-            TextField(
-                "Try \u{201C}sunset\u{201D} or \u{201C}add fireworks\u{201D}",
-                text: $tweak,
-                axis: .vertical
-            )
-            .focused($focused)
-            .font(.body)
-            .lineLimit(3...8)
-            .foregroundStyle(FemiTheme.onSurface)
-            .padding(16)
-            .background(FemiTheme.surface, in: .rect(cornerRadius: 16))
-            .padding(.horizontal, 16)
-
-            Spacer(minLength: 0)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(FemiTheme.background.ignoresSafeArea())
-        .navigationTitle("Change it")
-        .navigationBarTitleDisplayMode(.inline)
-        .onAppear { focused = true }
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") { focused = false }
-                    .font(.body.weight(.semibold))
-            }
-        }
-        .safeAreaInset(edge: .bottom) {
-            Button {
-                focused = false
-                path = [.generate(.deriveImage(text: trimmed, filename: filename))]
-            } label: {
-                Text(trimmed.isEmpty ? "Type to make new ones" : "Make new ones")
-                    .animation(.easeInOut(duration: 0.15), value: trimmed.isEmpty)
-            }
-            .buttonStyle(FemiAccentButtonStyle())
-            .disabled(trimmed.isEmpty)
-            .padding(16)
-            .background(.regularMaterial)
-        }
-    }
-}
-
-// MARK: - UploadSong placeholder (audio import sheet)
-
-struct UploadSong: View {
-    let onComplete: () -> Void
-
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                FemiTheme.background.ignoresSafeArea()
-                VStack(spacing: 14) {
-                    Image(systemName: "music.note")
-                        .font(.system(size: 44, weight: .light))
-                        .foregroundStyle(FemiTheme.accent)
-                    Text("Upload song")
-                        .font(.title2.bold())
-                        .foregroundStyle(FemiTheme.onSurface)
-                    Text("Audio import lives here.")
-                        .font(.footnote)
-                        .foregroundStyle(FemiTheme.muted)
-                }
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done", action: onComplete)
-                        .foregroundStyle(FemiTheme.muted)
-                }
-            }
-            .toolbarBackground(FemiTheme.background, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
-        }
-    }
-}
-
 // MARK: - ContentView
 
 struct Generate: View {
-    @Binding var appPath: [AppRoute]
-    /// Generation intent from GenerateNew via `.generate(GenerateAction)`.
-    /// Nil on the tab-root Generate; set on the pushed destination.
-    let action: GenerateAction?
     /// Parent app's topup handler — installed on the view model on appear so
     /// `gateOnCredit` can await it when credits run dry.
     let onTopupNeeded: () async -> Bool
+    /// Fired when the user taps an image in the grid. Threaded through to the
+    /// view model on appear.
+    let onImageTapped: (String) -> Void
+    /// Fired when the user taps the song-title slot. Parent presents its own
+    /// song-picker sheet.
+    let onUploadSong: () -> Void
+    /// Set only in derive mode. Runs on the first task tick after appear.
+    let pendingAction: PendingAction?
     @State private var viewModel = FemiGenerateViewModel()
     @State private var photoPickerItem: PhotosPickerItem?
     @State private var showingPhotoPicker = false
-    @State private var presentingSongPickerDummy = false
     @State private var presentingProjectPickerDummy = false
 
     var body: some View {
@@ -2152,40 +1761,26 @@ struct Generate: View {
                 viewModel.viewingVideo = nil
             }
         }
-        .sheet(isPresented: $presentingSongPickerDummy) {
-            UploadSong(onComplete: { presentingSongPickerDummy = false })
-        }
+        // Song picker + project picker are now parent-app concerns. Parent
+        // pushes its team's views in response to callbacks (see toolbar
+        // buttons that still toggle these flags — wire to parent later).
         .sheet(isPresented: $presentingProjectPickerDummy) {
             ProjectPickerDummy()
         }
         .environment(viewModel)
-        // Sync viewModel.phase → Router's appPath. Route payload is the
-        // filename String — Router never sees feature model types.
-        .onChange(of: viewModel.phase) { _, newPhase in
-            if case .derive(let image) = newPhase {
-                if !appPath.contains(where: { if case .derive = $0 { return true } else { return false } }) {
-                    appPath.append(.derive(image.file))
-                }
-            } else if let idx = appPath.lastIndex(where: { if case .derive = $0 { return true } else { return false } }) {
-                appPath.remove(at: idx)
-            }
-        }
-        // Reverse sync: when the user swipes back from FemiDeriveView, appPath
-        // drops the .derive entry; bring the viewModel back to .grid.
-        .onChange(of: appPath) { _, _ in
-            if case .derive = viewModel.phase,
-               !appPath.contains(where: { if case .derive = $0 { return true } else { return false } }) {
-                viewModel.phase = .grid
-            }
-        }
         .preferredColorScheme(.dark)
         .task {
             viewModel.onTopupNeeded = onTopupNeeded
+            viewModel.onImageTapped = onImageTapped
             await viewModel.bootstrap()
-        }
-        .task(id: action) {
-            guard let action else { return }
-            await viewModel.runGenerateAction(action)
+            // Derive mode: parent pushed us with a pending action — run it
+            // once the bootstrap has settled so pricing / project are ready.
+            if let pendingAction {
+                await viewModel.runDerive(
+                    text: pendingAction.tweak,
+                    filename: pendingAction.filename
+                )
+            }
         }
         .photosPicker(isPresented: $showingPhotoPicker,
                       selection: $photoPickerItem,
@@ -2213,12 +1808,9 @@ struct Generate: View {
     @ViewBuilder
     private var content: some View {
         switch viewModel.phase {
-        case .onboarding:
-            KineticOnboardingView(onComplete: viewModel.finishOnboarding)
-                .task { viewModel.onboardingAudio.start(resource: "generate_onboarding", ext: "wav") }
         case .generating(let kind):
             GeneratingOverlay(kind: kind)
-        case .grid, .derive:
+        case .grid:
             gridLayer
         case .complete:
             CompletionView(onDone: { viewModel.phase = .grid })
@@ -2294,7 +1886,7 @@ struct Generate: View {
             //   - long-press → project picker (rare action, hidden moat)
             ToolbarItem(placement: .principal) {
                 Button {
-                    presentingSongPickerDummy = true
+                    onUploadSong()
                 } label: {
                     HStack(spacing: 6) {
                         if let song = FemiLocalStore.uploadSong {
@@ -2367,13 +1959,6 @@ struct Generate: View {
         return false
     }
 
-    private var deriveBinding: Binding<Bool> {
-        Binding(
-            get: { if case .derive = viewModel.phase { true } else { false } },
-            set: { v in if !v, case .derive = viewModel.phase { viewModel.phase = .grid } }
-        )
-    }
-
 }
 
 
@@ -2421,232 +2006,6 @@ private struct ProjectPickerDummy: View {
             .toolbarBackground(FemiTheme.background, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
         }
-    }
-}
-
-// MARK: - Kinetic onboarding sandbox
-//
-// Spike of the proposed flagship onboarding. Two diagonal halves, each cutting
-// to different images on opposite beats during a 1.5s burst, then settling into
-// a held composition with the headline. A subtle "ghost" beat dims the image
-// briefly before returning. Cuts run at 4 Hz (well under the 3 Hz photosensitive
-// threshold). Reduce-Motion serves a still hero. Tap anywhere to skip.
-
-private enum OnboardingSide { case left, right }
-
-private struct DiagonalHalfShape: Shape {
-    let side: OnboardingSide
-    // Top edge intersect at 65% across, bottom at 35% — ~30° lean.
-    var topRatio: CGFloat = 0.65
-    var bottomRatio: CGFloat = 0.35
-
-    func path(in rect: CGRect) -> Path {
-        let topX = rect.width * topRatio
-        let bottomX = rect.width * bottomRatio
-        return Path { p in
-            switch side {
-            case .left:
-                p.move(to: .zero)
-                p.addLine(to: CGPoint(x: topX, y: 0))
-                p.addLine(to: CGPoint(x: bottomX, y: rect.height))
-                p.addLine(to: CGPoint(x: 0, y: rect.height))
-                p.closeSubpath()
-            case .right:
-                p.move(to: CGPoint(x: topX, y: 0))
-                p.addLine(to: CGPoint(x: rect.width, y: 0))
-                p.addLine(to: CGPoint(x: rect.width, y: rect.height))
-                p.addLine(to: CGPoint(x: bottomX, y: rect.height))
-                p.closeSubpath()
-            }
-        }
-    }
-}
-
-private struct DiagonalLineShape: Shape {
-    var topRatio: CGFloat = 0.65
-    var bottomRatio: CGFloat = 0.35
-
-    func path(in rect: CGRect) -> Path {
-        Path { p in
-            p.move(to: CGPoint(x: rect.width * topRatio, y: 0))
-            p.addLine(to: CGPoint(x: rect.width * bottomRatio, y: rect.height))
-        }
-    }
-}
-
-private struct KineticOnboardingView: View {
-    let onComplete: () -> Void
-    // Asset-catalog names (no extension). Bundled with the binary.
-    var images: [String] = ["generate_img1", "generate_img2", "generate_img3", "generate_img4"]
-    /// Skip the kinetic burst and render the held composition directly.
-    /// Used for previewing the "after settle" state.
-    var forcedHeld: Bool = false
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var start: Date = .init()
-    @State private var showSkipHint = false
-
-    private var renderStill: Bool { reduceMotion || forcedHeld }
-
-    // Timing — burst long enough for 4 images to each appear twice per side.
-    private let cutInterval: Double = 0.25     // 4 Hz
-    private let burstDuration: Double = 2.0
-    private let settleDuration: Double = 0.5
-    private let holdDuration: Double = 1.0
-    private let ghostDuration: Double = 0.3
-    private let returnDuration: Double = 0.5
-
-    var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-
-            if renderStill {
-                staticHero
-            } else {
-                TimelineView(.animation) { ctx in
-                    let t = ctx.date.timeIntervalSince(start)
-                    content(at: t)
-                }
-            }
-
-            VStack {
-                Spacer()
-                if showSkipHint {
-                    Text("tap to continue")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.5))
-                        .padding(.bottom, 32)
-                        .transition(.opacity)
-                }
-            }
-        }
-        .contentShape(.rect)
-        .onTapGesture { onComplete() }
-        .onAppear {
-            Task {
-                try? await Task.sleep(for: .seconds(1.4))
-                withAnimation(.easeIn(duration: 0.6)) { showSkipHint = true }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func content(at t: TimeInterval) -> some View {
-        let phase = phase(at: t)
-        let beat = Int(t / cutInterval)
-        // Right side cuts on an offset beat so the two halves are never in lock.
-        let leftIdx = phase.isBursting ? (beat % images.count) : 0
-        let rightIdx = phase.isBursting ? ((beat + 1) % images.count) : (images.count - 1)
-
-        GeometryReader { geo in
-            ZStack {
-                halfImage(
-                    file: images[leftIdx],
-                    tint: FemiTheme.accentMagenta,
-                    side: .left,
-                    in: geo.size,
-                    holding: !phase.isBursting
-                )
-                halfImage(
-                    file: images[rightIdx],
-                    tint: FemiTheme.accentBlue,
-                    side: .right,
-                    in: geo.size,
-                    holding: !phase.isBursting
-                )
-                DiagonalLineShape()
-                    .stroke(.white.opacity(0.85), lineWidth: 1.5)
-
-                VStack {
-                    Spacer()
-                    Text("Let's make a music video.")
-                        .font(.system(size: 38, weight: .heavy))
-                        .foregroundStyle(.white)
-                        .minimumScaleFactor(0.6)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.center)
-                        .shadow(color: .black.opacity(0.7), radius: 10, y: 4)
-                        .padding(.horizontal, 24)
-                    Spacer().frame(height: geo.size.height * 0.42)
-                }
-                .opacity(phase.headlineAlpha)
-            }
-            .opacity(phase.masterAlpha)
-        }
-        .ignoresSafeArea()
-    }
-
-    @ViewBuilder
-    private func halfImage(file: String, tint: Color, side: OnboardingSide,
-                            in size: CGSize, holding: Bool) -> some View {
-        // Asset-catalog images, shipped in the binary. Faster than FemiAuthorizedImage
-        // (no network, no caching layer) and works offline / before auth is set.
-        Image(file)
-            .resizable()
-            .aspectRatio(contentMode: .fill)
-            .frame(width: size.width, height: size.height)
-            .clipped()
-            .overlay(tint.opacity(holding ? 0.5 : 0.3).blendMode(.overlay))
-            .clipShape(DiagonalHalfShape(side: side))
-    }
-
-    private struct Phase {
-        var isBursting: Bool
-        var masterAlpha: Double
-        var headlineAlpha: Double
-    }
-
-    private func phase(at t: TimeInterval) -> Phase {
-        let burstEnd  = burstDuration                       // 1.5
-        let settleEnd = burstEnd + settleDuration           // 2.0
-        let holdEnd   = settleEnd + holdDuration            // 3.0
-        let ghostEnd  = holdEnd + ghostDuration             // 3.3
-        let returnEnd = ghostEnd + returnDuration           // 3.8
-
-        if t < burstEnd {
-            return Phase(isBursting: true, masterAlpha: 1, headlineAlpha: 0)
-        } else if t < settleEnd {
-            let p = (t - burstEnd) / settleDuration
-            return Phase(isBursting: false, masterAlpha: 1, headlineAlpha: p)
-        } else if t < holdEnd {
-            return Phase(isBursting: false, masterAlpha: 1, headlineAlpha: 1)
-        } else if t < ghostEnd {
-            // "Ghost": dim everything to 30% to suggest a held breath.
-            let p = (t - holdEnd) / ghostDuration
-            return Phase(isBursting: false, masterAlpha: 1 - p * 0.7, headlineAlpha: 1)
-        } else if t < returnEnd {
-            let p = (t - ghostEnd) / returnDuration
-            return Phase(isBursting: false, masterAlpha: 0.3 + p * 0.7, headlineAlpha: 1)
-        } else {
-            return Phase(isBursting: false, masterAlpha: 1, headlineAlpha: 1)
-        }
-    }
-
-    @ViewBuilder
-    private var staticHero: some View {
-        GeometryReader { geo in
-            ZStack {
-                halfImage(file: images[0], tint: FemiTheme.accentMagenta,
-                          side: .left, in: geo.size, holding: true)
-                halfImage(file: images[1 % images.count], tint: FemiTheme.accentBlue,
-                          side: .right, in: geo.size, holding: true)
-                DiagonalLineShape()
-                    .stroke(.white.opacity(0.85), lineWidth: 1.5)
-                VStack {
-                    Spacer()
-                    Text("Let's make a music video.")
-                        .font(.system(size: 38, weight: .heavy))
-                        .foregroundStyle(.white)
-                        .minimumScaleFactor(0.6)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.center)
-                        .shadow(color: .black.opacity(0.7), radius: 10, y: 4)
-                        .padding(.horizontal, 24)
-                    Spacer().frame(height: geo.size.height * 0.42)
-                }
-            }
-        }
-        .ignoresSafeArea()
     }
 }
 
@@ -2711,7 +2070,7 @@ private func femiSelectionBadge(order: Int?) -> some View {
 }
 
 @ViewBuilder
-private func femiHeartButton(isLiked: Bool, action: @escaping () -> Void) -> some View {
+private func femiHeartButton(isLiked: Bool, action: @escaping @MainActor () -> Void) -> some View {
     Button {
         withAnimation(.spring(duration: 0.35)) { action() }
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()

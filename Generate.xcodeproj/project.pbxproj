@@ -18,9 +18,22 @@
 		14E303722FD8786700B6BB95 /* DemoGenerate.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DemoGenerate.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		14073F592FDDE1C300EE9C5D /* Exceptions for "Generate2" folder in "Generate2" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Package.swift,
+			);
+			target = 14073E912FDDBBDF00EE9C5D /* Generate2 */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		14073E932FDDBBDF00EE9C5D /* Generate2 */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				14073F592FDDE1C300EE9C5D /* Exceptions for "Generate2" folder in "Generate2" target */,
+			);
 			path = Generate2;
 			sourceTree = "<group>";
 		};
