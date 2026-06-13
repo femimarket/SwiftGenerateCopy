@@ -22,8 +22,9 @@ struct Generate2App: App {
 /// Team → Derive flow is exercisable without the team's actual package.
 private struct AppRoot: View {
     @State private var bridge = TopupBridge()
+    @State private var songBridge = SongBridge()
     @State private var path: [Route] = []
-    @State private var presentingSongPicker = false
+    @State private var presentingProjectPicker = false
 
     private let tokenid = "019ec07a-c943-7275-b758-2315b8c9fa6f"
 
@@ -35,7 +36,8 @@ private struct AppRoot: View {
                 onImageTapped: { imagePath in
                     path.append(.teamDerive(imagePath: imagePath))
                 },
-                onUploadSong: { presentingSongPicker = true }
+                onUploadSong: { await songBridge.request() },
+                onPickProject: { presentingProjectPicker = true }
             )
             .navigationDestination(for: Route.self) { route in
                 switch route {
@@ -53,7 +55,8 @@ private struct AppRoot: View {
                         onImageTapped: { imagePath in
                             path.append(.teamDerive(imagePath: imagePath))
                         },
-                        onUploadSong: { presentingSongPicker = true },
+                        onUploadSong: { await songBridge.request() },
+                        onPickProject: { presentingProjectPicker = true },
                         filename: filename,
                         tweak: tweak
                     )
@@ -66,16 +69,53 @@ private struct AppRoot: View {
                 onCancel: { bridge.resolve(false) }
             )
         }
-        .sheet(isPresented: $presentingSongPicker) {
-            DummySongPickerSheet(onClose: { presentingSongPicker = false })
+        .sheet(isPresented: $songBridge.showSheet, onDismiss: songBridge.resolveAsCancelIfPending) {
+            DummySongPickerSheet(
+                onPick: { data, filename in songBridge.resolve((data, filename)) },
+                onCancel: { songBridge.resolve(nil) }
+            )
+        }
+        .sheet(isPresented: $presentingProjectPicker) {
+            DummyProjectPickerSheet(onClose: { presentingProjectPicker = false })
         }
     }
 }
 
-/// Pretend version of the parent's song-picker. Real parent app presents its
-/// own audio-import sheet here.
-private struct DummySongPickerSheet: View {
+/// Pretend version of the parent's project picker. Real parent app presents
+/// its own project-management surface here.
+private struct DummyProjectPickerSheet: View {
     let onClose: () -> Void
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Capsule().fill(.gray.opacity(0.3))
+                .frame(width: 40, height: 4)
+                .padding(.top, 8)
+            Image(systemName: "rectangle.stack.fill")
+                .font(.system(size: 48, weight: .bold))
+                .foregroundStyle(.teal)
+            Text("Parent project picker (dummy)")
+                .font(.title2.bold())
+            Text("Real parent app shows its project-picker surface here.")
+                .font(.footnote)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+            Spacer()
+            Button("Done", action: onClose)
+                .buttonStyle(.borderedProminent)
+                .padding(.bottom, 24)
+        }
+        .padding(.horizontal, 16)
+        .presentationDetents([.medium])
+    }
+}
+
+/// Pretend version of the parent's song-picker. Real parent app presents its
+/// own audio-import sheet here. Returns stub bytes + a synthetic filename so
+/// the disk-save path is exercised end-to-end.
+private struct DummySongPickerSheet: View {
+    let onPick: (Data, String) -> Void
+    let onCancel: () -> Void
 
     var body: some View {
         VStack(spacing: 20) {
@@ -92,12 +132,48 @@ private struct DummySongPickerSheet: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
             Spacer()
-            Button("Done", action: onClose)
-                .buttonStyle(.borderedProminent)
-                .padding(.bottom, 24)
+            Button("Pretend pick succeeded") {
+                let stub = Data(repeating: 0, count: 1024)
+                onPick(stub, "dummy-\(UUID().uuidString.prefix(6)).m4a")
+            }
+            .buttonStyle(.borderedProminent)
+            Button("Cancel", role: .cancel) {
+                onCancel()
+            }
+            .padding(.bottom, 24)
         }
         .padding(.horizontal, 16)
         .presentationDetents([.medium])
+    }
+}
+
+/// Async-to-sheet bridge for the dummy song picker. Mirrors `TopupBridge`
+/// but resolves with `(Data, String)?` — the parent's audio-pick result.
+@MainActor @Observable
+private final class SongBridge {
+    var showSheet = false
+    private var continuation: CheckedContinuation<(Data, String)?, Never>?
+
+    func request() async -> (Data, String)? {
+        await withCheckedContinuation { cont in
+            Task { @MainActor in
+                self.continuation = cont
+                self.showSheet = true
+            }
+        }
+    }
+
+    func resolve(_ result: (Data, String)?) {
+        guard let cont = continuation else { return }
+        continuation = nil
+        cont.resume(returning: result)
+        showSheet = false
+    }
+
+    func resolveAsCancelIfPending() {
+        guard let cont = continuation else { return }
+        continuation = nil
+        cont.resume(returning: nil)
     }
 }
 

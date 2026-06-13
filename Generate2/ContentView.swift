@@ -13,6 +13,8 @@ import PhotosUI
 import Observation
 import FoundationModels
 import Api
+import AudioMarker
+
 
 // MARK: - Pending action (derive-mode init payload)
 
@@ -46,8 +48,13 @@ public struct ContentView: View {
     /// onto its NavigationStack.
     let onImageTapped: (_ path: String) -> Void
     /// Fired when the user taps the song-title slot in the toolbar. Parent
-    /// presents its own song-picker sheet (audio import / library / etc.).
-    let onUploadSong: () -> Void
+    /// presents its own song picker; returns `(audio bytes, suggested
+    /// filename)` on success or `nil` on cancel. Generate2 writes the bytes
+    /// to disk and uses the filename as the toolbar display title.
+    let onUploadSong: () async -> (Data, String)?
+    /// Fired when the user long-presses the song-title slot. Parent presents
+    /// its own project-picker surface (rare action, hidden moat).
+    let onPickProject: () -> Void
     /// Set only in derive mode. View runs this action on appear.
     let pendingAction: PendingAction?
 
@@ -56,12 +63,14 @@ public struct ContentView: View {
         tokenid: String,
         onTopupNeeded: @escaping () async -> Bool,
         onImageTapped: @escaping (String) -> Void,
-        onUploadSong: @escaping () -> Void
+        onUploadSong: @escaping () async -> (Data, String)?,
+        onPickProject: @escaping () -> Void
     ) {
         self.tokenid = tokenid
         self.onTopupNeeded = onTopupNeeded
         self.onImageTapped = onImageTapped
         self.onUploadSong = onUploadSong
+        self.onPickProject = onPickProject
         self.pendingAction = nil
         Self.installBearer(tokenid)
     }
@@ -73,7 +82,8 @@ public struct ContentView: View {
         tokenid: String,
         onTopupNeeded: @escaping () async -> Bool,
         onImageTapped: @escaping (String) -> Void,
-        onUploadSong: @escaping () -> Void,
+        onUploadSong: @escaping () async -> (Data, String)?,
+        onPickProject: @escaping () -> Void,
         filename: String,
         tweak: String
     ) {
@@ -81,6 +91,7 @@ public struct ContentView: View {
         self.onTopupNeeded = onTopupNeeded
         self.onImageTapped = onImageTapped
         self.onUploadSong = onUploadSong
+        self.onPickProject = onPickProject
         self.pendingAction = PendingAction(filename: filename, tweak: tweak)
         Self.installBearer(tokenid)
     }
@@ -95,6 +106,7 @@ public struct ContentView: View {
             onTopupNeeded: onTopupNeeded,
             onImageTapped: onImageTapped,
             onUploadSong: onUploadSong,
+            onPickProject: onPickProject,
             pendingAction: pendingAction
         )
     }
@@ -639,27 +651,6 @@ final class FemiGenerateViewModel {
 
     init() {
         if devSeedEnabled { devSeed() }
-        seedDummyProjectsForUIDemo()
-    }
-
-    /// Temporary: populate `allProjects` with 10 placeholder Projects so the
-    /// Recent + A-Z + search UI in `ProjectsSheet` is visible without real
-    /// data. Names are NATO phonetic so they're clearly placeholders and
-    /// give A-Z spread. Remove this when real projects exist.
-    private func seedDummyProjectsForUIDemo() {
-        let names = [
-            "Alpha", "Bravo", "Charlie", "Delta", "Echo",
-            "Foxtrot", "Golf", "Hotel", "India", "Juliett",
-        ]
-        let dummies = names.map { name in
-            Project(
-                about: "", audio: "\(name.lowercased()).mp3", audioLines: [],
-                faqs: [], genre: "", id: .v7(), playlist: "",
-                seasons: [], summary: name, userId: AppAuth.userId
-            )
-        }
-        self.allProjects = dummies
-        self.project = dummies.first
     }
 
     /// Dev seed: skip Song → splash → CTA → first generation and land
@@ -950,31 +941,23 @@ final class FemiGenerateViewModel {
         }
     }
 
-    /// SongView completed. The upload + project upsert happened inside
-    /// SongView itself — refetch projects and select the most recent.
-    func handleSongPicked() {
-        presentingNewSong = false
-        Task { [weak self] in
-            guard let self else { return }
-            let loaded = (try? await self.service.allProjects()) ?? []
-            await MainActor.run {
-                withAnimation(.spring(duration: 0.4)) {
-                    self.allProjects = loaded
-                    if let newest = loaded.first {
-                        self.project = newest
-                    }
-                    self.images = []
-                    self.videos = []
-                    self.pendingImages = []
-                    self.pendingVideos = []
-                    self.pendingGenerations = []
-                    self.lyrics = nil
-                    self.audiolines = nil
-                    self.selectedImageIds = []
-                    self.isSelectingForVideo = false
-                    self.phase = .grid
-                }
-            }
+    /// Parent's song picker returned audio bytes + a suggested filename.
+    /// Save to the current project's folder on disk and reset local state
+    /// so the grid reflects the new song.
+    func handleSongDataPicked(data: Data, filename: String) {
+        ProjectService.saveFile(data, named: filename)
+        FemiLocalStore.uploadSong = filename
+        withAnimation(.spring(duration: 0.4)) {
+            self.images = []
+            self.videos = []
+            self.pendingImages = []
+            self.pendingVideos = []
+            self.pendingGenerations = []
+            self.lyrics = nil
+            self.audiolines = nil
+            self.selectedImageIds = []
+            self.isSelectingForVideo = false
+            self.phase = .grid
         }
     }
 
@@ -1760,16 +1743,17 @@ struct Generate: View {
     /// Fired when the user taps an image in the grid. Threaded through to the
     /// view model on appear.
     let onImageTapped: (String) -> Void
-    /// Fired when the user taps the song-title slot. Parent presents its own
-    /// song-picker sheet.
-    let onUploadSong: () -> Void
+    /// Fired when the user taps the song-title slot. Returns (bytes,
+    /// suggested filename) on pick, nil on cancel.
+    let onUploadSong: () async -> (Data, String)?
+    /// Fired when the user long-presses the song-title slot. Parent presents
+    /// its own project-picker sheet.
+    let onPickProject: () -> Void
     /// Set only in derive mode. Runs on the first task tick after appear.
     let pendingAction: PendingAction?
     @State private var viewModel = FemiGenerateViewModel()
     @State private var photoPickerItem: PhotosPickerItem?
     @State private var showingPhotoPicker = false
-    @State private var presentingProjectPickerDummy = false
-
     var body: some View {
         ZStack {
             FemiTheme.background.ignoresSafeArea()
@@ -1780,12 +1764,6 @@ struct Generate: View {
             VideoDetailView(video: video, viewModel: viewModel) {
                 viewModel.viewingVideo = nil
             }
-        }
-        // Song picker + project picker are now parent-app concerns. Parent
-        // pushes its team's views in response to callbacks (see toolbar
-        // buttons that still toggle these flags — wire to parent later).
-        .sheet(isPresented: $presentingProjectPickerDummy) {
-            ProjectPickerDummy()
         }
         .environment(viewModel)
         .preferredColorScheme(.dark)
@@ -1901,12 +1879,15 @@ struct Generate: View {
                     }
                 }
             }
-            // Title triggers two dummy pickers via gesture:
-            //   - tap        → song picker (common action, discoverable)
-            //   - long-press → project picker (rare action, hidden moat)
+            // Title tap → parent's song picker (common, discoverable).
+            // Title long-press → parent's project picker (rare, hidden moat).
             ToolbarItem(placement: .principal) {
                 Button {
-                    onUploadSong()
+                    Task {
+                        if let (data, filename) = await onUploadSong() {
+                            viewModel.handleSongDataPicked(data: data, filename: filename)
+                        }
+                    }
                 } label: {
                     HStack(spacing: 6) {
                         if let song = FemiLocalStore.uploadSong {
@@ -1927,7 +1908,7 @@ struct Generate: View {
                 .buttonStyle(.plain)
                 .simultaneousGesture(
                     LongPressGesture(minimumDuration: 0.4).onEnded { _ in
-                        presentingProjectPickerDummy = true
+                        onPickProject()
                     }
                 )
             }
@@ -1980,55 +1961,6 @@ struct Generate: View {
     }
 
 }
-
-
-// MARK: - Dummy pickers (stand-ins for Team 1 / Team 2 surfaces)
-
-
-/// Stand-in for Team 1's project picker. Undefined for now per spec.
-/// First-launch flow auto-creates Project=1 so this screen isn't required
-/// to start using Generate.
-private struct ProjectPickerDummy: View {
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                FemiTheme.background.ignoresSafeArea()
-                VStack(spacing: 18) {
-                    Image(systemName: "rectangle.stack.fill")
-                        .font(.system(size: 44, weight: .light))
-                        .foregroundStyle(FemiTheme.accent)
-                    Text("Project picker")
-                        .font(.title2.bold())
-                        .foregroundStyle(FemiTheme.onSurface)
-                    Text("Dummy. Real screen owned by Team 1.\nUndefined for now.")
-                        .font(.footnote)
-                        .foregroundStyle(FemiTheme.muted)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 32)
-                    if let current = ProjectService.current {
-                        Text("Current project: \(current)")
-                            .font(.caption)
-                            .foregroundStyle(FemiTheme.muted)
-                            .padding(.top, 12)
-                    }
-                }
-            }
-            .navigationTitle("Project picker")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
-                        .foregroundStyle(FemiTheme.muted)
-                }
-            }
-            .toolbarBackground(FemiTheme.background, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
-        }
-    }
-}
-
 
 
 // MARK: - Generating overlay
