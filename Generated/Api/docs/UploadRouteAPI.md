@@ -9,7 +9,7 @@ Method | HTTP request | Description
 
 # **upload**
 ```swift
-    open class func upload(credit: Int64, episodes: [Episode], file: String, id: UUID, model: UploadModel, project: Int64, prompt: String, rating: Int, userId: String, completion: @escaping (_ data: Upload?, _ error: Error?) -> Void)
+    open class func upload(credit: Int64, file: String, id: UUID, userId: String, completion: @escaping (_ data: Upload?, _ error: Error?) -> Void)
 ```
 
 
@@ -20,16 +20,11 @@ Method | HTTP request | Description
 import Api
 
 let credit = 987 // Int64 | 
-let episodes = [Episode(id: 123, scenes: [Scene(audioLineId: 123, id: 123, shots: [Shot(draftImage: "draftImage_example", finalImage: "finalImage_example", id: 123)], text: "text_example")])] // [Episode] | 
 let file = "file_example" // String | 
 let id = 987 // UUID | uuid v7
-let model = UploadModel() // UploadModel | 
-let project = 987 // Int64 | transient, managed by server
-let prompt = "prompt_example" // String | 
-let rating = 987 // Int | 
 let userId = "userId_example" // String | 
 
-UploadRouteAPI.upload(credit: credit, episodes: episodes, file: file, id: id, model: model, project: project, prompt: prompt, rating: rating, userId: userId) { (response, error) in
+UploadRouteAPI.upload(credit: credit, file: file, id: id, userId: userId) { (response, error) in
     guard error == nil else {
         print(error)
         return
@@ -46,13 +41,8 @@ UploadRouteAPI.upload(credit: credit, episodes: episodes, file: file, id: id, mo
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
  **credit** | **Int64** |  | 
- **episodes** | [**[Episode]**](Episode.md) |  | 
  **file** | **String** |  | 
  **id** | **UUID** | uuid v7 | 
- **model** | [**UploadModel**](UploadModel.md) |  | 
- **project** | **Int64** | transient, managed by server | 
- **prompt** | **String** |  | 
- **rating** | **Int** |  | 
  **userId** | **String** |  | 
 
 ### Return type

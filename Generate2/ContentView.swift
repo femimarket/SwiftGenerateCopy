@@ -100,6 +100,31 @@ public struct ContentView: View {
     }
 }
 
+// MARK: - UUIDv7 (RFC 9562)
+
+extension UUID {
+    /// Time-ordered UUID v7: 48-bit ms timestamp + version/variant bits +
+    /// random tail. Server's `/upload`, `/api`, etc. specify v7 — Foundation's
+    /// `UUID()` is v4 and would not satisfy the contract.
+    static func v7() -> UUID {
+        var b = [UInt8](repeating: 0, count: 16)
+        let ms = UInt64(Date().timeIntervalSince1970 * 1000)
+        b[0] = UInt8((ms >> 40) & 0xff)
+        b[1] = UInt8((ms >> 32) & 0xff)
+        b[2] = UInt8((ms >> 24) & 0xff)
+        b[3] = UInt8((ms >> 16) & 0xff)
+        b[4] = UInt8((ms >> 8) & 0xff)
+        b[5] = UInt8(ms & 0xff)
+        for i in 6..<16 { b[i] = UInt8.random(in: 0...255) }
+        b[6] = (b[6] & 0x0f) | 0x70 // version 7
+        b[8] = (b[8] & 0x3f) | 0x80 // RFC 9562 variant
+        return UUID(uuid: (
+            b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
+            b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]
+        ))
+    }
+}
+
 // MARK: - Auth context (set once at app launch in GenerateApp.swift)
 
 fileprivate enum AppAuth {
@@ -213,7 +238,7 @@ private enum FemiApiRoute {
     static var emptyPay: ApiPay {
         ApiPay(
             currency: "",
-            id: UUID(),
+            id: .v7(),
             jws: "",
             loaded: false,
             packageName: "",
@@ -229,7 +254,7 @@ private enum FemiApiRoute {
         ApiPricing(
             artist: 0, audio: 0, chat: 0, creator: 0, director: 0,
             falFlux2Pro: 0, falNanoBanana2: 0, falZImageTurbo: 0,
-            gb: 0, generate: 0, id: UUID(), image: 0, lyricSync: 0,
+            gb: 0, generate: 0, id: .v7(), image: 0, lyricSync: 0,
             microPixLyra: 0, microPixVega: 0, nanoPixLuna: 0, nanoRenSpica: 0,
             question: 0, summary: 0, upload: 0
         )
@@ -245,7 +270,7 @@ private enum FemiApiRoute {
         audio: String = "",
         credit: Int64 = 0,
         file: String = "",
-        id: UUID = UUID(),
+        id: UUID = .v7(),
         image: String = "",
         messages: [ApiChatMessage] = [],
         model: ApiAiModel = .zimageturbo,
@@ -460,13 +485,8 @@ struct FemiGenerateAPI: Sendable {
         defer { try? FileManager.default.removeItem(at: localURL) }
         let result = try await UploadRouteAPI.upload(
             credit: 0,
-            episodes: [],
             file: suggestedName,
-            id: UUID(),
-            model: .unknown,
-            project: 0,
-            prompt: "",
-            rating: 0,
+            id: .v7(),
             userId: AppAuth.userId
         )
         return result.file
@@ -634,7 +654,7 @@ final class FemiGenerateViewModel {
         let dummies = names.map { name in
             Project(
                 about: "", audio: "\(name.lowercased()).mp3", audioLines: [],
-                faqs: [], genre: "", id: UUID(), playlist: "",
+                faqs: [], genre: "", id: .v7(), playlist: "",
                 seasons: [], summary: name, userId: AppAuth.userId
             )
         }
@@ -655,7 +675,7 @@ final class FemiGenerateViewModel {
             audioLines: [],
             faqs: [],
             genre: "",
-            id: UUID(),
+            id: .v7(),
             playlist: "",
             seasons: [],
             summary: "",

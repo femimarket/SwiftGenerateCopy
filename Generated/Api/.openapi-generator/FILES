@@ -60,7 +60,6 @@ Sources/Api/Models/Solana.swift
 Sources/Api/Models/Square.swift
 Sources/Api/Models/Status.swift
 Sources/Api/Models/Upload.swift
-Sources/Api/Models/UploadModel.swift
 Sources/Api/Models/Wise.swift
 Sources/Api/Models/WordAlignment.swift
 docs/API.md
@@ -103,7 +102,6 @@ docs/SquareRouteAPI.md
 docs/Status.md
 docs/StripeRouteAPI.md
 docs/Upload.md
-docs/UploadModel.md
 docs/UploadRouteAPI.md
 docs/Wise.md
 docs/WiseAPI.md

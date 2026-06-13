@@ -51,19 +51,14 @@ open class UploadRouteAPI {
     /**
 
      - parameter credit: (form)  
-     - parameter episodes: (form)  
      - parameter file: (form)  
      - parameter id: (form) uuid v7 
-     - parameter model: (form)  
-     - parameter project: (form) transient, managed by server 
-     - parameter prompt: (form)  
-     - parameter rating: (form)  
      - parameter userId: (form)  
      - parameter apiConfiguration: The configuration for the http request.
      - returns: Upload
      */
-    open class func upload(credit: Int64, episodes: [Episode], file: String, id: UUID, model: UploadModel, project: Int64, prompt: String, rating: Int, userId: String, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> Upload {
-        return try await uploadWithRequestBuilder(credit: credit, episodes: episodes, file: file, id: id, model: model, project: project, prompt: prompt, rating: rating, userId: userId, apiConfiguration: apiConfiguration).execute().body
+    open class func upload(credit: Int64, file: String, id: UUID, userId: String, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> Upload {
+        return try await uploadWithRequestBuilder(credit: credit, file: file, id: id, userId: userId, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -72,29 +67,19 @@ open class UploadRouteAPI {
        - type: http
        - name: bearer
      - parameter credit: (form)  
-     - parameter episodes: (form)  
      - parameter file: (form)  
      - parameter id: (form) uuid v7 
-     - parameter model: (form)  
-     - parameter project: (form) transient, managed by server 
-     - parameter prompt: (form)  
-     - parameter rating: (form)  
      - parameter userId: (form)  
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<Upload> 
      */
-    open class func uploadWithRequestBuilder(credit: Int64, episodes: [Episode], file: String, id: UUID, model: UploadModel, project: Int64, prompt: String, rating: Int, userId: String, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<Upload> {
+    open class func uploadWithRequestBuilder(credit: Int64, file: String, id: UUID, userId: String, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<Upload> {
         let localVariablePath = "/upload"
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         var localVariableParameters: [String: any Sendable] = [:]
         appendBracket(into: &localVariableParameters, baseName: "credit", value: credit)
-        appendBracket(into: &localVariableParameters, baseName: "episodes", value: episodes)
         appendBracket(into: &localVariableParameters, baseName: "file", value: file)
         appendBracket(into: &localVariableParameters, baseName: "id", value: id)
-        appendBracket(into: &localVariableParameters, baseName: "model", value: model)
-        appendBracket(into: &localVariableParameters, baseName: "project", value: project)
-        appendBracket(into: &localVariableParameters, baseName: "prompt", value: prompt)
-        appendBracket(into: &localVariableParameters, baseName: "rating", value: rating)
         appendBracket(into: &localVariableParameters, baseName: "user_id", value: userId)
         localVariableParameters["__form_file_fields"] = ["file"]
         

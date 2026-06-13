@@ -74,7 +74,6 @@ Class | Method | HTTP request | Description
  - [Square](docs/Square.md)
  - [Status](docs/Status.md)
  - [Upload](docs/Upload.md)
- - [UploadModel](docs/UploadModel.md)
  - [Wise](docs/Wise.md)
  - [WordAlignment](docs/WordAlignment.md)
 
