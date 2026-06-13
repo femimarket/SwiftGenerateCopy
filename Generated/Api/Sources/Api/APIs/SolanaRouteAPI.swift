@@ -50,20 +50,23 @@ open class SolanaRouteAPI {
 
     /**
 
+     - parameter amountCents: (form)  
+     - parameter id: (form)  
+     - parameter pubkey: (form)  
+     - parameter status: (form)  
      - parameter userId: (form)  
-     - parameter byColumn: (form)  (optional)
-     - parameter byFields: (form)  (optional)
-     - parameter byId: (form)  (optional)
-     - parameter delete: (form)  (optional)
-     - parameter paginate: (form)  (optional)
-     - parameter search: (form)  (optional)
-     - parameter update: (form)  (optional)
-     - parameter upsert: (form)  (optional)
+     - parameter credit: (form)  (optional)
+     - parameter loaded: (form)  (optional)
+     - parameter quotedOutUnits: (form)  (optional)
+     - parameter requestId: (form)  (optional)
+     - parameter signature: (form)  (optional)
+     - parameter signedTx: (form)  (optional)
+     - parameter unsignedTx: (form)  (optional)
      - parameter apiConfiguration: The configuration for the http request.
-     - returns: SolanaServerRequest
+     - returns: Solana
      */
-    open class func solana(userId: String, byColumn: SolanaByColumn? = nil, byFields: SolanaByFields? = nil, byId: SolanaById? = nil, delete: SolanaDelete? = nil, paginate: SolanaPaginate? = nil, search: SolanaSearch? = nil, update: SolanaUpdate? = nil, upsert: SolanaUpsert? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> SolanaServerRequest {
-        return try await solanaWithRequestBuilder(userId: userId, byColumn: byColumn, byFields: byFields, byId: byId, delete: delete, paginate: paginate, search: search, update: update, upsert: upsert, apiConfiguration: apiConfiguration).execute().body
+    open class func solana(amountCents: Int64, id: UUID, pubkey: String, status: Status, userId: String, credit: Int64? = nil, loaded: Bool? = nil, quotedOutUnits: Int64? = nil, requestId: String? = nil, signature: String? = nil, signedTx: String? = nil, unsignedTx: String? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> Solana {
+        return try await solanaWithRequestBuilder(amountCents: amountCents, id: id, pubkey: pubkey, status: status, userId: userId, credit: credit, loaded: loaded, quotedOutUnits: quotedOutUnits, requestId: requestId, signature: signature, signedTx: signedTx, unsignedTx: unsignedTx, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -71,30 +74,36 @@ open class SolanaRouteAPI {
      - Bearer Token:
        - type: http
        - name: bearer
+     - parameter amountCents: (form)  
+     - parameter id: (form)  
+     - parameter pubkey: (form)  
+     - parameter status: (form)  
      - parameter userId: (form)  
-     - parameter byColumn: (form)  (optional)
-     - parameter byFields: (form)  (optional)
-     - parameter byId: (form)  (optional)
-     - parameter delete: (form)  (optional)
-     - parameter paginate: (form)  (optional)
-     - parameter search: (form)  (optional)
-     - parameter update: (form)  (optional)
-     - parameter upsert: (form)  (optional)
+     - parameter credit: (form)  (optional)
+     - parameter loaded: (form)  (optional)
+     - parameter quotedOutUnits: (form)  (optional)
+     - parameter requestId: (form)  (optional)
+     - parameter signature: (form)  (optional)
+     - parameter signedTx: (form)  (optional)
+     - parameter unsignedTx: (form)  (optional)
      - parameter apiConfiguration: The configuration for the http request.
-     - returns: RequestBuilder<SolanaServerRequest> 
+     - returns: RequestBuilder<Solana> 
      */
-    open class func solanaWithRequestBuilder(userId: String, byColumn: SolanaByColumn? = nil, byFields: SolanaByFields? = nil, byId: SolanaById? = nil, delete: SolanaDelete? = nil, paginate: SolanaPaginate? = nil, search: SolanaSearch? = nil, update: SolanaUpdate? = nil, upsert: SolanaUpsert? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<SolanaServerRequest> {
+    open class func solanaWithRequestBuilder(amountCents: Int64, id: UUID, pubkey: String, status: Status, userId: String, credit: Int64? = nil, loaded: Bool? = nil, quotedOutUnits: Int64? = nil, requestId: String? = nil, signature: String? = nil, signedTx: String? = nil, unsignedTx: String? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<Solana> {
         let localVariablePath = "/solana"
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         var localVariableParameters: [String: any Sendable] = [:]
-        if let value = byColumn { appendBracket(into: &localVariableParameters, baseName: "by_column", value: value) }
-        if let value = byFields { appendBracket(into: &localVariableParameters, baseName: "by_fields", value: value) }
-        if let value = byId { appendBracket(into: &localVariableParameters, baseName: "by_id", value: value) }
-        if let value = delete { appendBracket(into: &localVariableParameters, baseName: "delete", value: value) }
-        if let value = paginate { appendBracket(into: &localVariableParameters, baseName: "paginate", value: value) }
-        if let value = search { appendBracket(into: &localVariableParameters, baseName: "search", value: value) }
-        if let value = update { appendBracket(into: &localVariableParameters, baseName: "update", value: value) }
-        if let value = upsert { appendBracket(into: &localVariableParameters, baseName: "upsert", value: value) }
+        appendBracket(into: &localVariableParameters, baseName: "amount_cents", value: amountCents)
+        if let value = credit { appendBracket(into: &localVariableParameters, baseName: "credit", value: value) }
+        appendBracket(into: &localVariableParameters, baseName: "id", value: id)
+        if let value = loaded { appendBracket(into: &localVariableParameters, baseName: "loaded", value: value) }
+        appendBracket(into: &localVariableParameters, baseName: "pubkey", value: pubkey)
+        if let value = quotedOutUnits { appendBracket(into: &localVariableParameters, baseName: "quoted_out_units", value: value) }
+        if let value = requestId { appendBracket(into: &localVariableParameters, baseName: "request_id", value: value) }
+        if let value = signature { appendBracket(into: &localVariableParameters, baseName: "signature", value: value) }
+        if let value = signedTx { appendBracket(into: &localVariableParameters, baseName: "signed_tx", value: value) }
+        appendBracket(into: &localVariableParameters, baseName: "status", value: status)
+        if let value = unsignedTx { appendBracket(into: &localVariableParameters, baseName: "unsigned_tx", value: value) }
         appendBracket(into: &localVariableParameters, baseName: "user_id", value: userId)
         
 
@@ -106,7 +115,7 @@ open class SolanaRouteAPI {
 
         let localVariableHeaderParameters = APIHelper.rejectNilHeaders(localVariableNillableHeaders)
 
-        let localVariableRequestBuilder: RequestBuilder<SolanaServerRequest>.Type = apiConfiguration.requestBuilderFactory.getBuilder()
+        let localVariableRequestBuilder: RequestBuilder<Solana>.Type = apiConfiguration.requestBuilderFactory.getBuilder()
 
         return localVariableRequestBuilder.init(method: "POST", URLString: (localVariableUrlComponents?.string ?? localVariableURLString), parameters: localVariableParameters, headers: localVariableHeaderParameters, requiresAuthentication: true, apiConfiguration: apiConfiguration)
     }

@@ -11,6 +11,7 @@ Name | Type | Description | Notes
 **search** | [**MicroPixVegaSearch**](MicroPixVegaSearch.md) |  | [optional] 
 **update** | [**MicroPixVegaUpdate**](MicroPixVegaUpdate.md) |  | [optional] 
 **upsert** | [**MicroPixVegaUpsert**](MicroPixVegaUpsert.md) |  | [optional] 
+**upsert1** | [**MicroPixVegaUpsert1**](MicroPixVegaUpsert1.md) |  | [optional] 
 **userId** | **String** |  | 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

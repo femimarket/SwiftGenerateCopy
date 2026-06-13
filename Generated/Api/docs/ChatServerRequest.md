@@ -11,6 +11,7 @@ Name | Type | Description | Notes
 **search** | [**ChatSearch**](ChatSearch.md) |  | [optional] 
 **update** | [**ChatUpdate**](ChatUpdate.md) |  | [optional] 
 **upsert** | [**ChatUpsert**](ChatUpsert.md) |  | [optional] 
+**upsert1** | [**ChatUpsert1**](ChatUpsert1.md) |  | [optional] 
 **userId** | **String** |  | 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

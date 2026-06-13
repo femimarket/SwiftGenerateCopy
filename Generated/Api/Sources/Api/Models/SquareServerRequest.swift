@@ -17,9 +17,10 @@ public struct SquareServerRequest: Sendable, Codable, Hashable {
     public var search: SquareSearch?
     public var update: SquareUpdate?
     public var upsert: SquareUpsert?
+    public var upsert1: SquareUpsert1?
     public var userId: String
 
-    public init(byColumn: SquareByColumn? = nil, byFields: SquareByFields? = nil, byId: SquareById? = nil, delete: SquareDelete? = nil, paginate: SquarePaginate? = nil, search: SquareSearch? = nil, update: SquareUpdate? = nil, upsert: SquareUpsert? = nil, userId: String) {
+    public init(byColumn: SquareByColumn? = nil, byFields: SquareByFields? = nil, byId: SquareById? = nil, delete: SquareDelete? = nil, paginate: SquarePaginate? = nil, search: SquareSearch? = nil, update: SquareUpdate? = nil, upsert: SquareUpsert? = nil, upsert1: SquareUpsert1? = nil, userId: String) {
         self.byColumn = byColumn
         self.byFields = byFields
         self.byId = byId
@@ -28,6 +29,7 @@ public struct SquareServerRequest: Sendable, Codable, Hashable {
         self.search = search
         self.update = update
         self.upsert = upsert
+        self.upsert1 = upsert1
         self.userId = userId
     }
 
@@ -40,6 +42,7 @@ public struct SquareServerRequest: Sendable, Codable, Hashable {
         case search
         case update
         case upsert
+        case upsert1
         case userId = "user_id"
     }
 
@@ -55,6 +58,7 @@ public struct SquareServerRequest: Sendable, Codable, Hashable {
         try container.encodeIfPresent(search, forKey: .search)
         try container.encodeIfPresent(update, forKey: .update)
         try container.encodeIfPresent(upsert, forKey: .upsert)
+        try container.encodeIfPresent(upsert1, forKey: .upsert1)
         try container.encode(userId, forKey: .userId)
     }
 }

@@ -59,11 +59,12 @@ open class NanoPixLunaRouteAPI {
      - parameter search: (form)  (optional)
      - parameter update: (form)  (optional)
      - parameter upsert: (form)  (optional)
+     - parameter upsert1: (form)  (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: NanoPixLunaServerRequest
      */
-    open class func nanoPixLuna(userId: String, byColumn: NanoPixLunaByColumn? = nil, byFields: NanoPixLunaByFields? = nil, byId: NanoPixLunaById? = nil, delete: NanoPixLunaDelete? = nil, paginate: NanoPixLunaPaginate? = nil, search: NanoPixLunaSearch? = nil, update: NanoPixLunaUpdate? = nil, upsert: NanoPixLunaUpsert? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> NanoPixLunaServerRequest {
-        return try await nanoPixLunaWithRequestBuilder(userId: userId, byColumn: byColumn, byFields: byFields, byId: byId, delete: delete, paginate: paginate, search: search, update: update, upsert: upsert, apiConfiguration: apiConfiguration).execute().body
+    open class func nanoPixLuna(userId: String, byColumn: NanoPixLunaByColumn? = nil, byFields: NanoPixLunaByFields? = nil, byId: NanoPixLunaById? = nil, delete: NanoPixLunaDelete? = nil, paginate: NanoPixLunaPaginate? = nil, search: NanoPixLunaSearch? = nil, update: NanoPixLunaUpdate? = nil, upsert: NanoPixLunaUpsert? = nil, upsert1: NanoPixLunaUpsert1? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> NanoPixLunaServerRequest {
+        return try await nanoPixLunaWithRequestBuilder(userId: userId, byColumn: byColumn, byFields: byFields, byId: byId, delete: delete, paginate: paginate, search: search, update: update, upsert: upsert, upsert1: upsert1, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -80,10 +81,11 @@ open class NanoPixLunaRouteAPI {
      - parameter search: (form)  (optional)
      - parameter update: (form)  (optional)
      - parameter upsert: (form)  (optional)
+     - parameter upsert1: (form)  (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<NanoPixLunaServerRequest> 
      */
-    open class func nanoPixLunaWithRequestBuilder(userId: String, byColumn: NanoPixLunaByColumn? = nil, byFields: NanoPixLunaByFields? = nil, byId: NanoPixLunaById? = nil, delete: NanoPixLunaDelete? = nil, paginate: NanoPixLunaPaginate? = nil, search: NanoPixLunaSearch? = nil, update: NanoPixLunaUpdate? = nil, upsert: NanoPixLunaUpsert? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<NanoPixLunaServerRequest> {
+    open class func nanoPixLunaWithRequestBuilder(userId: String, byColumn: NanoPixLunaByColumn? = nil, byFields: NanoPixLunaByFields? = nil, byId: NanoPixLunaById? = nil, delete: NanoPixLunaDelete? = nil, paginate: NanoPixLunaPaginate? = nil, search: NanoPixLunaSearch? = nil, update: NanoPixLunaUpdate? = nil, upsert: NanoPixLunaUpsert? = nil, upsert1: NanoPixLunaUpsert1? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<NanoPixLunaServerRequest> {
         let localVariablePath = "/nano_pix_luna"
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         var localVariableParameters: [String: any Sendable] = [:]
@@ -95,6 +97,7 @@ open class NanoPixLunaRouteAPI {
         if let value = search { appendBracket(into: &localVariableParameters, baseName: "search", value: value) }
         if let value = update { appendBracket(into: &localVariableParameters, baseName: "update", value: value) }
         if let value = upsert { appendBracket(into: &localVariableParameters, baseName: "upsert", value: value) }
+        if let value = upsert1 { appendBracket(into: &localVariableParameters, baseName: "upsert1", value: value) }
         appendBracket(into: &localVariableParameters, baseName: "user_id", value: userId)
         
 

@@ -11,6 +11,7 @@ Name | Type | Description | Notes
 **search** | [**NanoPixLunaSearch**](NanoPixLunaSearch.md) |  | [optional] 
 **update** | [**NanoPixLunaUpdate**](NanoPixLunaUpdate.md) |  | [optional] 
 **upsert** | [**NanoPixLunaUpsert**](NanoPixLunaUpsert.md) |  | [optional] 
+**upsert1** | [**NanoPixLunaUpsert1**](NanoPixLunaUpsert1.md) |  | [optional] 
 **userId** | **String** |  | 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

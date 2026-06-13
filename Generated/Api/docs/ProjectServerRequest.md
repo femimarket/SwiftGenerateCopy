@@ -11,6 +11,7 @@ Name | Type | Description | Notes
 **search** | [**ProjectSearch**](ProjectSearch.md) |  | [optional] 
 **update** | [**ProjectUpdate**](ProjectUpdate.md) |  | [optional] 
 **upsert** | [**ProjectUpsert**](ProjectUpsert.md) |  | [optional] 
+**upsert1** | [**ProjectUpsert1**](ProjectUpsert1.md) |  | [optional] 
 **userId** | **String** |  | 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

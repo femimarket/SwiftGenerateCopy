@@ -50,20 +50,15 @@ open class SummaryRouteAPI {
 
     /**
 
+     - parameter credit: (form)  
+     - parameter id: (form)  
+     - parameter text: (form) On input: the text (e.g. lyrics) to summarise. On output / when stored: the AI-generated vibe summary. Server overwrites client-supplied value once vLLM responds. 
      - parameter userId: (form)  
-     - parameter byColumn: (form)  (optional)
-     - parameter byFields: (form)  (optional)
-     - parameter byId: (form)  (optional)
-     - parameter delete: (form)  (optional)
-     - parameter paginate: (form)  (optional)
-     - parameter search: (form)  (optional)
-     - parameter update: (form)  (optional)
-     - parameter upsert: (form)  (optional)
      - parameter apiConfiguration: The configuration for the http request.
-     - returns: SummaryServerRequest
+     - returns: Summary
      */
-    open class func summary(userId: String, byColumn: SummaryByColumn? = nil, byFields: SummaryByFields? = nil, byId: SummaryById? = nil, delete: SummaryDelete? = nil, paginate: SummaryPaginate? = nil, search: SummarySearch? = nil, update: SummaryUpdate? = nil, upsert: SummaryUpsert? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> SummaryServerRequest {
-        return try await summaryWithRequestBuilder(userId: userId, byColumn: byColumn, byFields: byFields, byId: byId, delete: delete, paginate: paginate, search: search, update: update, upsert: upsert, apiConfiguration: apiConfiguration).execute().body
+    open class func summary(credit: Int64, id: UUID, text: String, userId: String, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> Summary {
+        return try await summaryWithRequestBuilder(credit: credit, id: id, text: text, userId: userId, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -71,30 +66,20 @@ open class SummaryRouteAPI {
      - Bearer Token:
        - type: http
        - name: bearer
+     - parameter credit: (form)  
+     - parameter id: (form)  
+     - parameter text: (form) On input: the text (e.g. lyrics) to summarise. On output / when stored: the AI-generated vibe summary. Server overwrites client-supplied value once vLLM responds. 
      - parameter userId: (form)  
-     - parameter byColumn: (form)  (optional)
-     - parameter byFields: (form)  (optional)
-     - parameter byId: (form)  (optional)
-     - parameter delete: (form)  (optional)
-     - parameter paginate: (form)  (optional)
-     - parameter search: (form)  (optional)
-     - parameter update: (form)  (optional)
-     - parameter upsert: (form)  (optional)
      - parameter apiConfiguration: The configuration for the http request.
-     - returns: RequestBuilder<SummaryServerRequest> 
+     - returns: RequestBuilder<Summary> 
      */
-    open class func summaryWithRequestBuilder(userId: String, byColumn: SummaryByColumn? = nil, byFields: SummaryByFields? = nil, byId: SummaryById? = nil, delete: SummaryDelete? = nil, paginate: SummaryPaginate? = nil, search: SummarySearch? = nil, update: SummaryUpdate? = nil, upsert: SummaryUpsert? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<SummaryServerRequest> {
+    open class func summaryWithRequestBuilder(credit: Int64, id: UUID, text: String, userId: String, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<Summary> {
         let localVariablePath = "/summary"
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         var localVariableParameters: [String: any Sendable] = [:]
-        if let value = byColumn { appendBracket(into: &localVariableParameters, baseName: "by_column", value: value) }
-        if let value = byFields { appendBracket(into: &localVariableParameters, baseName: "by_fields", value: value) }
-        if let value = byId { appendBracket(into: &localVariableParameters, baseName: "by_id", value: value) }
-        if let value = delete { appendBracket(into: &localVariableParameters, baseName: "delete", value: value) }
-        if let value = paginate { appendBracket(into: &localVariableParameters, baseName: "paginate", value: value) }
-        if let value = search { appendBracket(into: &localVariableParameters, baseName: "search", value: value) }
-        if let value = update { appendBracket(into: &localVariableParameters, baseName: "update", value: value) }
-        if let value = upsert { appendBracket(into: &localVariableParameters, baseName: "upsert", value: value) }
+        appendBracket(into: &localVariableParameters, baseName: "credit", value: credit)
+        appendBracket(into: &localVariableParameters, baseName: "id", value: id)
+        appendBracket(into: &localVariableParameters, baseName: "text", value: text)
         appendBracket(into: &localVariableParameters, baseName: "user_id", value: userId)
         
 
@@ -106,7 +91,7 @@ open class SummaryRouteAPI {
 
         let localVariableHeaderParameters = APIHelper.rejectNilHeaders(localVariableNillableHeaders)
 
-        let localVariableRequestBuilder: RequestBuilder<SummaryServerRequest>.Type = apiConfiguration.requestBuilderFactory.getBuilder()
+        let localVariableRequestBuilder: RequestBuilder<Summary>.Type = apiConfiguration.requestBuilderFactory.getBuilder()
 
         return localVariableRequestBuilder.init(method: "POST", URLString: (localVariableUrlComponents?.string ?? localVariableURLString), parameters: localVariableParameters, headers: localVariableHeaderParameters, requiresAuthentication: true, apiConfiguration: apiConfiguration)
     }

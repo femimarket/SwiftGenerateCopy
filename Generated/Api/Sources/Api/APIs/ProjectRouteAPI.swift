@@ -50,20 +50,21 @@ open class ProjectRouteAPI {
 
     /**
 
+     - parameter about: (form)  
+     - parameter audio: (form)  
+     - parameter audioLines: (form)  
+     - parameter faqs: (form)  
+     - parameter genre: (form)  
+     - parameter id: (form)  
+     - parameter playlist: (form)  
+     - parameter seasons: (form)  
+     - parameter summary: (form)  
      - parameter userId: (form)  
-     - parameter byColumn: (form)  (optional)
-     - parameter byFields: (form)  (optional)
-     - parameter byId: (form)  (optional)
-     - parameter delete: (form)  (optional)
-     - parameter paginate: (form)  (optional)
-     - parameter search: (form)  (optional)
-     - parameter update: (form)  (optional)
-     - parameter upsert: (form)  (optional)
      - parameter apiConfiguration: The configuration for the http request.
-     - returns: ProjectServerRequest
+     - returns: Project
      */
-    open class func project(userId: String, byColumn: ProjectByColumn? = nil, byFields: ProjectByFields? = nil, byId: ProjectById? = nil, delete: ProjectDelete? = nil, paginate: ProjectPaginate? = nil, search: ProjectSearch? = nil, update: ProjectUpdate? = nil, upsert: ProjectUpsert? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> ProjectServerRequest {
-        return try await projectWithRequestBuilder(userId: userId, byColumn: byColumn, byFields: byFields, byId: byId, delete: delete, paginate: paginate, search: search, update: update, upsert: upsert, apiConfiguration: apiConfiguration).execute().body
+    open class func project(about: String, audio: String, audioLines: [AudioLine], faqs: [Faq], genre: String, id: UUID, playlist: String, seasons: [Season], summary: String, userId: String, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> Project {
+        return try await projectWithRequestBuilder(about: about, audio: audio, audioLines: audioLines, faqs: faqs, genre: genre, id: id, playlist: playlist, seasons: seasons, summary: summary, userId: userId, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -71,30 +72,32 @@ open class ProjectRouteAPI {
      - Bearer Token:
        - type: http
        - name: bearer
+     - parameter about: (form)  
+     - parameter audio: (form)  
+     - parameter audioLines: (form)  
+     - parameter faqs: (form)  
+     - parameter genre: (form)  
+     - parameter id: (form)  
+     - parameter playlist: (form)  
+     - parameter seasons: (form)  
+     - parameter summary: (form)  
      - parameter userId: (form)  
-     - parameter byColumn: (form)  (optional)
-     - parameter byFields: (form)  (optional)
-     - parameter byId: (form)  (optional)
-     - parameter delete: (form)  (optional)
-     - parameter paginate: (form)  (optional)
-     - parameter search: (form)  (optional)
-     - parameter update: (form)  (optional)
-     - parameter upsert: (form)  (optional)
      - parameter apiConfiguration: The configuration for the http request.
-     - returns: RequestBuilder<ProjectServerRequest> 
+     - returns: RequestBuilder<Project> 
      */
-    open class func projectWithRequestBuilder(userId: String, byColumn: ProjectByColumn? = nil, byFields: ProjectByFields? = nil, byId: ProjectById? = nil, delete: ProjectDelete? = nil, paginate: ProjectPaginate? = nil, search: ProjectSearch? = nil, update: ProjectUpdate? = nil, upsert: ProjectUpsert? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<ProjectServerRequest> {
+    open class func projectWithRequestBuilder(about: String, audio: String, audioLines: [AudioLine], faqs: [Faq], genre: String, id: UUID, playlist: String, seasons: [Season], summary: String, userId: String, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<Project> {
         let localVariablePath = "/project"
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         var localVariableParameters: [String: any Sendable] = [:]
-        if let value = byColumn { appendBracket(into: &localVariableParameters, baseName: "by_column", value: value) }
-        if let value = byFields { appendBracket(into: &localVariableParameters, baseName: "by_fields", value: value) }
-        if let value = byId { appendBracket(into: &localVariableParameters, baseName: "by_id", value: value) }
-        if let value = delete { appendBracket(into: &localVariableParameters, baseName: "delete", value: value) }
-        if let value = paginate { appendBracket(into: &localVariableParameters, baseName: "paginate", value: value) }
-        if let value = search { appendBracket(into: &localVariableParameters, baseName: "search", value: value) }
-        if let value = update { appendBracket(into: &localVariableParameters, baseName: "update", value: value) }
-        if let value = upsert { appendBracket(into: &localVariableParameters, baseName: "upsert", value: value) }
+        appendBracket(into: &localVariableParameters, baseName: "about", value: about)
+        appendBracket(into: &localVariableParameters, baseName: "audio", value: audio)
+        appendBracket(into: &localVariableParameters, baseName: "audio_lines", value: audioLines)
+        appendBracket(into: &localVariableParameters, baseName: "faqs", value: faqs)
+        appendBracket(into: &localVariableParameters, baseName: "genre", value: genre)
+        appendBracket(into: &localVariableParameters, baseName: "id", value: id)
+        appendBracket(into: &localVariableParameters, baseName: "playlist", value: playlist)
+        appendBracket(into: &localVariableParameters, baseName: "seasons", value: seasons)
+        appendBracket(into: &localVariableParameters, baseName: "summary", value: summary)
         appendBracket(into: &localVariableParameters, baseName: "user_id", value: userId)
         
 
@@ -106,7 +109,7 @@ open class ProjectRouteAPI {
 
         let localVariableHeaderParameters = APIHelper.rejectNilHeaders(localVariableNillableHeaders)
 
-        let localVariableRequestBuilder: RequestBuilder<ProjectServerRequest>.Type = apiConfiguration.requestBuilderFactory.getBuilder()
+        let localVariableRequestBuilder: RequestBuilder<Project>.Type = apiConfiguration.requestBuilderFactory.getBuilder()
 
         return localVariableRequestBuilder.init(method: "POST", URLString: (localVariableUrlComponents?.string ?? localVariableURLString), parameters: localVariableParameters, headers: localVariableHeaderParameters, requiresAuthentication: true, apiConfiguration: apiConfiguration)
     }

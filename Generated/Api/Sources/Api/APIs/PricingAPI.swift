@@ -55,21 +55,26 @@ open class PricingAPI {
      - parameter chat: (form)  
      - parameter creator: (form)  
      - parameter director: (form)  
+     - parameter falFlux2Pro: (form)  
+     - parameter falNanoBanana2: (form)  
+     - parameter falZImageTurbo: (form)  
      - parameter gb: (form)  
+     - parameter generate: (form)  
      - parameter id: (form)  
      - parameter image: (form)  
+     - parameter lyricSync: (form)  
      - parameter microPixLyra: (form)  
      - parameter microPixVega: (form)  
      - parameter nanoPixLuna: (form)  
      - parameter nanoRenSpica: (form)  
      - parameter question: (form)  
      - parameter summary: (form)  
-     - parameter lyricSync: (form)  (optional)
+     - parameter upload: (form)  
      - parameter apiConfiguration: The configuration for the http request.
      - returns: Pricing
      */
-    open class func pricingRoute(artist: Int64, audio: Int64, chat: Int64, creator: Int64, director: Int64, gb: Int64, id: UUID, image: Int64, microPixLyra: Int64, microPixVega: Int64, nanoPixLuna: Int64, nanoRenSpica: Int64, question: Int64, summary: Int64, lyricSync: Int64? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> Pricing {
-        return try await pricingRouteWithRequestBuilder(artist: artist, audio: audio, chat: chat, creator: creator, director: director, gb: gb, id: id, image: image, microPixLyra: microPixLyra, microPixVega: microPixVega, nanoPixLuna: nanoPixLuna, nanoRenSpica: nanoRenSpica, question: question, summary: summary, lyricSync: lyricSync, apiConfiguration: apiConfiguration).execute().body
+    open class func pricingRoute(artist: Int64, audio: Int64, chat: Int64, creator: Int64, director: Int64, falFlux2Pro: Int64, falNanoBanana2: Int64, falZImageTurbo: Int64, gb: Int64, generate: Int64, id: UUID, image: Int64, lyricSync: Int64, microPixLyra: Int64, microPixVega: Int64, nanoPixLuna: Int64, nanoRenSpica: Int64, question: Int64, summary: Int64, upload: Int64, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> Pricing {
+        return try await pricingRouteWithRequestBuilder(artist: artist, audio: audio, chat: chat, creator: creator, director: director, falFlux2Pro: falFlux2Pro, falNanoBanana2: falNanoBanana2, falZImageTurbo: falZImageTurbo, gb: gb, generate: generate, id: id, image: image, lyricSync: lyricSync, microPixLyra: microPixLyra, microPixVega: microPixVega, nanoPixLuna: nanoPixLuna, nanoRenSpica: nanoRenSpica, question: question, summary: summary, upload: upload, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -82,20 +87,25 @@ open class PricingAPI {
      - parameter chat: (form)  
      - parameter creator: (form)  
      - parameter director: (form)  
+     - parameter falFlux2Pro: (form)  
+     - parameter falNanoBanana2: (form)  
+     - parameter falZImageTurbo: (form)  
      - parameter gb: (form)  
+     - parameter generate: (form)  
      - parameter id: (form)  
      - parameter image: (form)  
+     - parameter lyricSync: (form)  
      - parameter microPixLyra: (form)  
      - parameter microPixVega: (form)  
      - parameter nanoPixLuna: (form)  
      - parameter nanoRenSpica: (form)  
      - parameter question: (form)  
      - parameter summary: (form)  
-     - parameter lyricSync: (form)  (optional)
+     - parameter upload: (form)  
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<Pricing> 
      */
-    open class func pricingRouteWithRequestBuilder(artist: Int64, audio: Int64, chat: Int64, creator: Int64, director: Int64, gb: Int64, id: UUID, image: Int64, microPixLyra: Int64, microPixVega: Int64, nanoPixLuna: Int64, nanoRenSpica: Int64, question: Int64, summary: Int64, lyricSync: Int64? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<Pricing> {
+    open class func pricingRouteWithRequestBuilder(artist: Int64, audio: Int64, chat: Int64, creator: Int64, director: Int64, falFlux2Pro: Int64, falNanoBanana2: Int64, falZImageTurbo: Int64, gb: Int64, generate: Int64, id: UUID, image: Int64, lyricSync: Int64, microPixLyra: Int64, microPixVega: Int64, nanoPixLuna: Int64, nanoRenSpica: Int64, question: Int64, summary: Int64, upload: Int64, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<Pricing> {
         let localVariablePath = "/pricing_route"
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         var localVariableParameters: [String: any Sendable] = [:]
@@ -104,16 +114,21 @@ open class PricingAPI {
         appendBracket(into: &localVariableParameters, baseName: "chat", value: chat)
         appendBracket(into: &localVariableParameters, baseName: "creator", value: creator)
         appendBracket(into: &localVariableParameters, baseName: "director", value: director)
+        appendBracket(into: &localVariableParameters, baseName: "fal_flux2_pro", value: falFlux2Pro)
+        appendBracket(into: &localVariableParameters, baseName: "fal_nano_banana2", value: falNanoBanana2)
+        appendBracket(into: &localVariableParameters, baseName: "fal_z_image_turbo", value: falZImageTurbo)
         appendBracket(into: &localVariableParameters, baseName: "gb", value: gb)
+        appendBracket(into: &localVariableParameters, baseName: "generate", value: generate)
         appendBracket(into: &localVariableParameters, baseName: "id", value: id)
         appendBracket(into: &localVariableParameters, baseName: "image", value: image)
-        if let value = lyricSync { appendBracket(into: &localVariableParameters, baseName: "lyric_sync", value: value) }
+        appendBracket(into: &localVariableParameters, baseName: "lyric_sync", value: lyricSync)
         appendBracket(into: &localVariableParameters, baseName: "micro_pix_lyra", value: microPixLyra)
         appendBracket(into: &localVariableParameters, baseName: "micro_pix_vega", value: microPixVega)
         appendBracket(into: &localVariableParameters, baseName: "nano_pix_luna", value: nanoPixLuna)
         appendBracket(into: &localVariableParameters, baseName: "nano_ren_spica", value: nanoRenSpica)
         appendBracket(into: &localVariableParameters, baseName: "question", value: question)
         appendBracket(into: &localVariableParameters, baseName: "summary", value: summary)
+        appendBracket(into: &localVariableParameters, baseName: "upload", value: upload)
         
 
         let localVariableUrlComponents = URLComponents(string: localVariableURLString)

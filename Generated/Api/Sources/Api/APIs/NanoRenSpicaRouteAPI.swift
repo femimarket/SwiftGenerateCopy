@@ -50,20 +50,20 @@ open class NanoRenSpicaRouteAPI {
 
     /**
 
+     - parameter audio: (form)  
+     - parameter id: (form)  
+     - parameter image: (form)  
+     - parameter prompt: (form)  
+     - parameter status: (form)  
      - parameter userId: (form)  
-     - parameter byColumn: (form)  (optional)
-     - parameter byFields: (form)  (optional)
-     - parameter byId: (form)  (optional)
-     - parameter delete: (form)  (optional)
-     - parameter paginate: (form)  (optional)
-     - parameter search: (form)  (optional)
-     - parameter update: (form)  (optional)
-     - parameter upsert: (form)  (optional)
+     - parameter credit: (form)  (optional)
+     - parameter file: (form)  (optional)
+     - parameter requestId: (form)  (optional)
      - parameter apiConfiguration: The configuration for the http request.
-     - returns: NanoRenSpicaServerRequest
+     - returns: NanoRenSpica
      */
-    open class func nanoRenSpica(userId: String, byColumn: NanoRenSpicaByColumn? = nil, byFields: NanoRenSpicaByFields? = nil, byId: NanoRenSpicaById? = nil, delete: NanoRenSpicaDelete? = nil, paginate: NanoRenSpicaPaginate? = nil, search: NanoRenSpicaSearch? = nil, update: NanoRenSpicaUpdate? = nil, upsert: NanoRenSpicaUpsert? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> NanoRenSpicaServerRequest {
-        return try await nanoRenSpicaWithRequestBuilder(userId: userId, byColumn: byColumn, byFields: byFields, byId: byId, delete: delete, paginate: paginate, search: search, update: update, upsert: upsert, apiConfiguration: apiConfiguration).execute().body
+    open class func nanoRenSpica(audio: String, id: UUID, image: String, prompt: String, status: Status, userId: String, credit: Int64? = nil, file: String? = nil, requestId: String? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> NanoRenSpica {
+        return try await nanoRenSpicaWithRequestBuilder(audio: audio, id: id, image: image, prompt: prompt, status: status, userId: userId, credit: credit, file: file, requestId: requestId, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -71,30 +71,30 @@ open class NanoRenSpicaRouteAPI {
      - Bearer Token:
        - type: http
        - name: bearer
+     - parameter audio: (form)  
+     - parameter id: (form)  
+     - parameter image: (form)  
+     - parameter prompt: (form)  
+     - parameter status: (form)  
      - parameter userId: (form)  
-     - parameter byColumn: (form)  (optional)
-     - parameter byFields: (form)  (optional)
-     - parameter byId: (form)  (optional)
-     - parameter delete: (form)  (optional)
-     - parameter paginate: (form)  (optional)
-     - parameter search: (form)  (optional)
-     - parameter update: (form)  (optional)
-     - parameter upsert: (form)  (optional)
+     - parameter credit: (form)  (optional)
+     - parameter file: (form)  (optional)
+     - parameter requestId: (form)  (optional)
      - parameter apiConfiguration: The configuration for the http request.
-     - returns: RequestBuilder<NanoRenSpicaServerRequest> 
+     - returns: RequestBuilder<NanoRenSpica> 
      */
-    open class func nanoRenSpicaWithRequestBuilder(userId: String, byColumn: NanoRenSpicaByColumn? = nil, byFields: NanoRenSpicaByFields? = nil, byId: NanoRenSpicaById? = nil, delete: NanoRenSpicaDelete? = nil, paginate: NanoRenSpicaPaginate? = nil, search: NanoRenSpicaSearch? = nil, update: NanoRenSpicaUpdate? = nil, upsert: NanoRenSpicaUpsert? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<NanoRenSpicaServerRequest> {
+    open class func nanoRenSpicaWithRequestBuilder(audio: String, id: UUID, image: String, prompt: String, status: Status, userId: String, credit: Int64? = nil, file: String? = nil, requestId: String? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<NanoRenSpica> {
         let localVariablePath = "/nano_ren_spica"
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         var localVariableParameters: [String: any Sendable] = [:]
-        if let value = byColumn { appendBracket(into: &localVariableParameters, baseName: "by_column", value: value) }
-        if let value = byFields { appendBracket(into: &localVariableParameters, baseName: "by_fields", value: value) }
-        if let value = byId { appendBracket(into: &localVariableParameters, baseName: "by_id", value: value) }
-        if let value = delete { appendBracket(into: &localVariableParameters, baseName: "delete", value: value) }
-        if let value = paginate { appendBracket(into: &localVariableParameters, baseName: "paginate", value: value) }
-        if let value = search { appendBracket(into: &localVariableParameters, baseName: "search", value: value) }
-        if let value = update { appendBracket(into: &localVariableParameters, baseName: "update", value: value) }
-        if let value = upsert { appendBracket(into: &localVariableParameters, baseName: "upsert", value: value) }
+        appendBracket(into: &localVariableParameters, baseName: "audio", value: audio)
+        if let value = credit { appendBracket(into: &localVariableParameters, baseName: "credit", value: value) }
+        if let value = file { appendBracket(into: &localVariableParameters, baseName: "file", value: value) }
+        appendBracket(into: &localVariableParameters, baseName: "id", value: id)
+        appendBracket(into: &localVariableParameters, baseName: "image", value: image)
+        appendBracket(into: &localVariableParameters, baseName: "prompt", value: prompt)
+        if let value = requestId { appendBracket(into: &localVariableParameters, baseName: "request_id", value: value) }
+        appendBracket(into: &localVariableParameters, baseName: "status", value: status)
         appendBracket(into: &localVariableParameters, baseName: "user_id", value: userId)
         
 
@@ -106,7 +106,7 @@ open class NanoRenSpicaRouteAPI {
 
         let localVariableHeaderParameters = APIHelper.rejectNilHeaders(localVariableNillableHeaders)
 
-        let localVariableRequestBuilder: RequestBuilder<NanoRenSpicaServerRequest>.Type = apiConfiguration.requestBuilderFactory.getBuilder()
+        let localVariableRequestBuilder: RequestBuilder<NanoRenSpica>.Type = apiConfiguration.requestBuilderFactory.getBuilder()
 
         return localVariableRequestBuilder.init(method: "POST", URLString: (localVariableUrlComponents?.string ?? localVariableURLString), parameters: localVariableParameters, headers: localVariableHeaderParameters, requiresAuthentication: true, apiConfiguration: apiConfiguration)
     }

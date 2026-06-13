@@ -50,20 +50,20 @@ open class SquareRouteAPI {
 
     /**
 
+     - parameter amountCents: (form)  
+     - parameter id: (form)  
+     - parameter status: (form)  
      - parameter userId: (form)  
-     - parameter byColumn: (form)  (optional)
-     - parameter byFields: (form)  (optional)
-     - parameter byId: (form)  (optional)
-     - parameter delete: (form)  (optional)
-     - parameter paginate: (form)  (optional)
-     - parameter search: (form)  (optional)
-     - parameter update: (form)  (optional)
-     - parameter upsert: (form)  (optional)
+     - parameter credit: (form)  (optional)
+     - parameter loaded: (form)  (optional)
+     - parameter paymentUrl: (form)  (optional)
+     - parameter squareOrderId: (form)  (optional)
+     - parameter squarePaymentId: (form)  (optional)
      - parameter apiConfiguration: The configuration for the http request.
-     - returns: SquareServerRequest
+     - returns: Square
      */
-    open class func square(userId: String, byColumn: SquareByColumn? = nil, byFields: SquareByFields? = nil, byId: SquareById? = nil, delete: SquareDelete? = nil, paginate: SquarePaginate? = nil, search: SquareSearch? = nil, update: SquareUpdate? = nil, upsert: SquareUpsert? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> SquareServerRequest {
-        return try await squareWithRequestBuilder(userId: userId, byColumn: byColumn, byFields: byFields, byId: byId, delete: delete, paginate: paginate, search: search, update: update, upsert: upsert, apiConfiguration: apiConfiguration).execute().body
+    open class func square(amountCents: Int64, id: UUID, status: Status, userId: String, credit: Int64? = nil, loaded: Bool? = nil, paymentUrl: String? = nil, squareOrderId: String? = nil, squarePaymentId: String? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> Square {
+        return try await squareWithRequestBuilder(amountCents: amountCents, id: id, status: status, userId: userId, credit: credit, loaded: loaded, paymentUrl: paymentUrl, squareOrderId: squareOrderId, squarePaymentId: squarePaymentId, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -71,30 +71,30 @@ open class SquareRouteAPI {
      - Bearer Token:
        - type: http
        - name: bearer
+     - parameter amountCents: (form)  
+     - parameter id: (form)  
+     - parameter status: (form)  
      - parameter userId: (form)  
-     - parameter byColumn: (form)  (optional)
-     - parameter byFields: (form)  (optional)
-     - parameter byId: (form)  (optional)
-     - parameter delete: (form)  (optional)
-     - parameter paginate: (form)  (optional)
-     - parameter search: (form)  (optional)
-     - parameter update: (form)  (optional)
-     - parameter upsert: (form)  (optional)
+     - parameter credit: (form)  (optional)
+     - parameter loaded: (form)  (optional)
+     - parameter paymentUrl: (form)  (optional)
+     - parameter squareOrderId: (form)  (optional)
+     - parameter squarePaymentId: (form)  (optional)
      - parameter apiConfiguration: The configuration for the http request.
-     - returns: RequestBuilder<SquareServerRequest> 
+     - returns: RequestBuilder<Square> 
      */
-    open class func squareWithRequestBuilder(userId: String, byColumn: SquareByColumn? = nil, byFields: SquareByFields? = nil, byId: SquareById? = nil, delete: SquareDelete? = nil, paginate: SquarePaginate? = nil, search: SquareSearch? = nil, update: SquareUpdate? = nil, upsert: SquareUpsert? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<SquareServerRequest> {
+    open class func squareWithRequestBuilder(amountCents: Int64, id: UUID, status: Status, userId: String, credit: Int64? = nil, loaded: Bool? = nil, paymentUrl: String? = nil, squareOrderId: String? = nil, squarePaymentId: String? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<Square> {
         let localVariablePath = "/square"
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         var localVariableParameters: [String: any Sendable] = [:]
-        if let value = byColumn { appendBracket(into: &localVariableParameters, baseName: "by_column", value: value) }
-        if let value = byFields { appendBracket(into: &localVariableParameters, baseName: "by_fields", value: value) }
-        if let value = byId { appendBracket(into: &localVariableParameters, baseName: "by_id", value: value) }
-        if let value = delete { appendBracket(into: &localVariableParameters, baseName: "delete", value: value) }
-        if let value = paginate { appendBracket(into: &localVariableParameters, baseName: "paginate", value: value) }
-        if let value = search { appendBracket(into: &localVariableParameters, baseName: "search", value: value) }
-        if let value = update { appendBracket(into: &localVariableParameters, baseName: "update", value: value) }
-        if let value = upsert { appendBracket(into: &localVariableParameters, baseName: "upsert", value: value) }
+        appendBracket(into: &localVariableParameters, baseName: "amount_cents", value: amountCents)
+        if let value = credit { appendBracket(into: &localVariableParameters, baseName: "credit", value: value) }
+        appendBracket(into: &localVariableParameters, baseName: "id", value: id)
+        if let value = loaded { appendBracket(into: &localVariableParameters, baseName: "loaded", value: value) }
+        if let value = paymentUrl { appendBracket(into: &localVariableParameters, baseName: "payment_url", value: value) }
+        if let value = squareOrderId { appendBracket(into: &localVariableParameters, baseName: "square_order_id", value: value) }
+        if let value = squarePaymentId { appendBracket(into: &localVariableParameters, baseName: "square_payment_id", value: value) }
+        appendBracket(into: &localVariableParameters, baseName: "status", value: status)
         appendBracket(into: &localVariableParameters, baseName: "user_id", value: userId)
         
 
@@ -106,7 +106,7 @@ open class SquareRouteAPI {
 
         let localVariableHeaderParameters = APIHelper.rejectNilHeaders(localVariableNillableHeaders)
 
-        let localVariableRequestBuilder: RequestBuilder<SquareServerRequest>.Type = apiConfiguration.requestBuilderFactory.getBuilder()
+        let localVariableRequestBuilder: RequestBuilder<Square>.Type = apiConfiguration.requestBuilderFactory.getBuilder()
 
         return localVariableRequestBuilder.init(method: "POST", URLString: (localVariableUrlComponents?.string ?? localVariableURLString), parameters: localVariableParameters, headers: localVariableHeaderParameters, requiresAuthentication: true, apiConfiguration: apiConfiguration)
     }

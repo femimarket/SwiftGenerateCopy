@@ -96,7 +96,7 @@ private enum Media {
 // MARK: - Local models (client-side state)
 
 struct GeneratedImage: Identifiable, Hashable, Sendable {
-    enum Source: String, Sendable { case lyra, vega, luna, upload }
+    enum Source: String, Sendable { case zimage, nanoBanana, flux2, upload }
     let id: UUID
     let file: String
     let prompt: String
@@ -164,9 +164,10 @@ private struct GenerateService: Sendable {
     func currentPricing() async throws -> Pricing {
         try await PricingAPI.pricingRoute(
             artist: 0, audio: 0, chat: 0, creator: 0, director: 0,
+            falFlux2Pro: 0, falNanoBanana2: 0, falZImageTurbo: 0,
             gb: 0, id: UUID(), image: 0,
             microPixLyra: 0, microPixVega: 0, nanoPixLuna: 0, nanoRenSpica: 0,
-            question: 0, summary: 0, lyricSync: nil
+            question: 0, summary: 0, upload: 0, lyricSync: nil
         )
     }
 
@@ -229,112 +230,58 @@ private struct GenerateService: Sendable {
         return capped(reply)
     }
 
-    /// Fan out 3 text-to-image models in parallel: Lyra, Vega, Luna.
-    /// Each call upserts (status = Pending) and then polls by id until status = Completed.
+    /// Fan out 3 text-to-image models in parallel via the generate endpoint:
+    /// ZImageTurbo, NanoBanana2, Flux2Pro. Each call upserts via `upsert1`
+    /// (status = Pending) and then polls by id until status = Completed.
     func generateImageBatch(prompt: String) async -> [GeneratedImage] {
-        async let lyra = generateLyra(prompt: prompt)
-        async let vega = generateVega(prompt: prompt)
-        async let luna = generateLuna(prompt: prompt)
-        return await [lyra, vega, luna].compactMap { $0 }
+        async let zimage = runOne(model: .zimageturbo, source: .zimage, prompt: prompt)
+        async let nano = runOne(model: .nanoBanana2, source: .nanoBanana, prompt: prompt)
+        async let flux = runOne(model: .flux2Pro, source: .flux2, prompt: prompt)
+        return await [zimage, nano, flux].compactMap { $0 }
     }
 
-    // Polling constants. Status: 1 = Pending, 2 = Completed, 3 = Failed.
     private var pollInterval: Duration { .milliseconds(1500) }
     private var pollTimeout: Duration { .seconds(120) }
 
-    private func generateLyra(prompt: String) async -> GeneratedImage? {
-        let payload = MicroPixLyra(
-            id: UUID(), prompt: prompt, status: ._1, userId: AppAuth.userId
+    private func runOne(
+        model: GenerateModel,
+        source: GeneratedImage.Source,
+        prompt: String
+    ) async -> GeneratedImage? {
+        let payload = Api.Generate(
+            credit: 0,
+            file: "",
+            id: UUID(),
+            model: model,
+            prompt: prompt,
+            requestId: "",
+            status: .pending,
+            userId: AppAuth.userId
         )
-        guard let started = try? await MicroPixLyraRouteAPI.microPixLyra(
-            userId: AppAuth.userId, upsert: MicroPixLyraUpsert(data: [payload])
-        ).upsert?.data.first else { return nil }
-        guard let done = try? await pollLyra(id: started.id), let file = done.file
-        else { return nil }
-        return GeneratedImage(id: done.id, file: file, prompt: done.prompt, source: .lyra)
+        guard let started = try? await GenerateRouteAPI.generate(
+            userId: AppAuth.userId, upsert1: GenerateUpsert1(data: payload)
+        ).upsert1?.data else { return nil }
+        guard let done = try? await pollGenerate(id: started.id) else { return nil }
+        return GeneratedImage(id: done.id, file: done.file, prompt: done.prompt, source: source)
     }
 
-    private func pollLyra(id: UUID) async throws -> MicroPixLyra {
+    private func pollGenerate(id: UUID) async throws -> Api.Generate {
         let started = ContinuousClock.now
         while ContinuousClock.now - started <= pollTimeout {
-            let r = try await MicroPixLyraRouteAPI.microPixLyra(
-                userId: AppAuth.userId, byId: MicroPixLyraById(id: id)
+            let r = try await GenerateRouteAPI.generate(
+                userId: AppAuth.userId, byId: GenerateById(id: id)
             )
             if let row = r.byId?.data {
                 switch row.status {
-                case ._2: return row
-                case ._3: throw NSError(domain: "Lyra", code: 1,
+                case .completed: return row
+                case .failed: throw NSError(domain: "Generate", code: 1,
                             userInfo: [NSLocalizedDescriptionKey: "Generation failed"])
-                case ._1: break
+                case .pending: break
                 }
             }
             try await Task.sleep(for: pollInterval)
         }
-        throw NSError(domain: "Lyra", code: 2,
-                      userInfo: [NSLocalizedDescriptionKey: "Timed out"])
-    }
-
-    private func generateVega(prompt: String) async -> GeneratedImage? {
-        let payload = MicroPixVega(
-            id: UUID(), prompt: prompt, status: ._1, userId: AppAuth.userId
-        )
-        guard let started = try? await MicroPixVegaRouteAPI.microPixVega(
-            userId: AppAuth.userId, upsert: MicroPixVegaUpsert(data: [payload])
-        ).upsert?.data.first else { return nil }
-        guard let done = try? await pollVega(id: started.id), let file = done.file
-        else { return nil }
-        return GeneratedImage(id: done.id, file: file, prompt: done.prompt, source: .vega)
-    }
-
-    private func pollVega(id: UUID) async throws -> MicroPixVega {
-        let started = ContinuousClock.now
-        while ContinuousClock.now - started <= pollTimeout {
-            let r = try await MicroPixVegaRouteAPI.microPixVega(
-                userId: AppAuth.userId, byId: MicroPixVegaById(id: id)
-            )
-            if let row = r.byId?.data {
-                switch row.status {
-                case ._2: return row
-                case ._3: throw NSError(domain: "Vega", code: 1,
-                            userInfo: [NSLocalizedDescriptionKey: "Generation failed"])
-                case ._1: break
-                }
-            }
-            try await Task.sleep(for: pollInterval)
-        }
-        throw NSError(domain: "Vega", code: 2,
-                      userInfo: [NSLocalizedDescriptionKey: "Timed out"])
-    }
-
-    private func generateLuna(prompt: String) async -> GeneratedImage? {
-        let payload = NanoPixLuna(
-            id: UUID(), prompt: prompt, status: ._1, userId: AppAuth.userId
-        )
-        guard let started = try? await NanoPixLunaRouteAPI.nanoPixLuna(
-            userId: AppAuth.userId, upsert: NanoPixLunaUpsert(data: [payload])
-        ).upsert?.data.first else { return nil }
-        guard let done = try? await pollLuna(id: started.id), let file = done.file
-        else { return nil }
-        return GeneratedImage(id: done.id, file: file, prompt: done.prompt, source: .luna)
-    }
-
-    private func pollLuna(id: UUID) async throws -> NanoPixLuna {
-        let started = ContinuousClock.now
-        while ContinuousClock.now - started <= pollTimeout {
-            let r = try await NanoPixLunaRouteAPI.nanoPixLuna(
-                userId: AppAuth.userId, byId: NanoPixLunaById(id: id)
-            )
-            if let row = r.byId?.data {
-                switch row.status {
-                case ._2: return row
-                case ._3: throw NSError(domain: "Luna", code: 1,
-                            userInfo: [NSLocalizedDescriptionKey: "Generation failed"])
-                case ._1: break
-                }
-            }
-            try await Task.sleep(for: pollInterval)
-        }
-        throw NSError(domain: "Luna", code: 2,
+        throw NSError(domain: "Generate", code: 2,
                       userInfo: [NSLocalizedDescriptionKey: "Timed out"])
     }
 
@@ -594,6 +541,66 @@ final class OnboardingAudio {
     }
 }
 
+// MARK: - Local store (Project dir + UploadSong filename)
+//
+// Stand-in for the eventual Team 1 / Team 2 picker screens. Generate
+// reads two UserDefaults keys to drive itself:
+//   - `Project`     → directory name under Documents/ (e.g. "1")
+//   - `UploadSong`  → audio filename at Documents/<filename>
+//
+// Audio files live flat at Documents/ root so multiple projects can share
+// the same song. Generations live under Documents/<Project>/.
+
+enum LocalStore {
+    private static let projectKey = "Project"
+    private static let uploadSongKey = "UploadSong"
+
+    static var documents: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+    }
+
+    static var project: String? {
+        get { UserDefaults.standard.string(forKey: projectKey) }
+        set {
+            if let v = newValue { UserDefaults.standard.set(v, forKey: projectKey) }
+            else { UserDefaults.standard.removeObject(forKey: projectKey) }
+        }
+    }
+
+    static var uploadSong: String? {
+        get { UserDefaults.standard.string(forKey: uploadSongKey) }
+        set {
+            if let v = newValue { UserDefaults.standard.set(v, forKey: uploadSongKey) }
+            else { UserDefaults.standard.removeObject(forKey: uploadSongKey) }
+        }
+    }
+
+    /// First-launch bootstrap: ensure the user has Project="1" with a backing
+    /// directory at Documents/1/. UploadSong stays nil until the user picks one.
+    static func bootstrapFirstLaunchIfNeeded() {
+        if project == nil {
+            project = "1"
+        }
+        let dir = documents.appendingPathComponent(project!)
+        if !FileManager.default.fileExists(atPath: dir.path) {
+            try? FileManager.default.createDirectory(at: dir,
+                                                     withIntermediateDirectories: true)
+        }
+    }
+
+    /// Copy the picked audio file into Documents/ (flat). Returns the filename
+    /// that downstream code uses as the project's `audio` reference.
+    static func saveSongToDocuments(_ source: URL) throws -> String {
+        let filename = source.lastPathComponent
+        let dest = documents.appendingPathComponent(filename)
+        if FileManager.default.fileExists(atPath: dest.path) {
+            try FileManager.default.removeItem(at: dest)
+        }
+        try FileManager.default.copyItem(at: source, to: dest)
+        return filename
+    }
+}
+
 // MARK: - Like store (client-only, UserDefaults)
 
 @MainActor @Observable
@@ -704,7 +711,7 @@ private final class GenerateViewModel {
         case onboarding
         case generating(GenerationKind)
         case grid
-        case derive(image: GeneratedImage)
+        case derive(image: GeneratedImage?)
         case complete
     }
 
@@ -827,7 +834,7 @@ private final class GenerateViewModel {
                 id: UUID(),
                 file: name,
                 prompt: "Dev seed",
-                source: .lyra
+                source: .zimage
             )
         }
         self.phase = .grid
@@ -1979,6 +1986,9 @@ struct Generate: View {
 
     @State private var viewModel = GenerateViewModel()
     @State private var photoPickerItem: PhotosPickerItem?
+    @State private var showingPhotoPicker = false
+    @State private var presentingSongPickerDummy = false
+    @State private var presentingProjectPickerDummy = false
 
     var body: some View {
         NavigationStack {
@@ -2007,17 +2017,21 @@ struct Generate: View {
                     viewModel.viewingVideo = nil
                 }
             }
-            .sheet(isPresented: $viewModel.presentingProjects) {
-                ProjectsSheet(viewModel: viewModel)
-                    .presentationDetents([.large])
-                    .presentationBackground(.regularMaterial)
+            .sheet(isPresented: $presentingSongPickerDummy) {
+                SongPickerDummy(onPicked: { filename in
+                    LocalStore.uploadSong = filename
+                })
             }
-            .fullScreenCover(isPresented: $viewModel.presentingNewSong) {
-                SongView(onComplete: { _ in viewModel.handleSongPicked() })
+            .sheet(isPresented: $presentingProjectPickerDummy) {
+                ProjectPickerDummy()
             }
         }
         .preferredColorScheme(.dark)
         .task { await viewModel.bootstrap() }
+        .onAppear { LocalStore.bootstrapFirstLaunchIfNeeded() }
+        .photosPicker(isPresented: $showingPhotoPicker,
+                      selection: $photoPickerItem,
+                      matching: .images)
         // Photo picker bridge: user picks → load Data → hand off to view model.
         .onChange(of: photoPickerItem) { _, newValue in
             guard let newValue else { return }
@@ -2097,28 +2111,53 @@ struct Generate: View {
         } else {
             ToolbarItem(placement: .topBarLeading) {
                 if shouldShowUploadButton {
-                    PhotosPicker(selection: $photoPickerItem, matching: .images) {
+                    Menu {
+                        Button {
+                            viewModel.tapStart()
+                        } label: {
+                            Label("Generate", systemImage: "sparkles")
+                        }
+                        Button {
+                            showingPhotoPicker = true
+                        } label: {
+                            Label("Upload from Photos", systemImage: "photo")
+                        }
+                    } label: {
                         Image(systemName: "plus")
                             .font(.title3.weight(.semibold))
                             .foregroundStyle(Theme.onSurface)
                     }
                 }
             }
-            // Project switcher: tap song name → ProjectsSheet. Always renders
-            // so the principal slot is never empty.
+            // Title triggers two dummy pickers via gesture:
+            //   - tap        → song picker (common action, discoverable)
+            //   - long-press → project picker (rare action, hidden moat)
             ToolbarItem(placement: .principal) {
-                Button(action: viewModel.openProjects) {
+                Button {
+                    presentingSongPickerDummy = true
+                } label: {
                     HStack(spacing: 6) {
-                        Text(viewModel.project.map { projectTitle($0) } ?? "Generate")
-                            .font(.headline)
-                            .foregroundStyle(Theme.onSurface)
-                            .lineLimit(1)
+                        if let song = LocalStore.uploadSong {
+                            Text(song)
+                                .font(.headline)
+                                .foregroundStyle(Theme.onSurface)
+                                .lineLimit(1)
+                        } else {
+                            Text("No song")
+                                .font(.headline)
+                                .foregroundStyle(Theme.muted)
+                        }
                         Image(systemName: "chevron.down")
                             .font(.caption.weight(.bold))
                             .foregroundStyle(Theme.muted)
                     }
                 }
                 .buttonStyle(.plain)
+                .simultaneousGesture(
+                    LongPressGesture(minimumDuration: 0.4).onEnded { _ in
+                        presentingProjectPickerDummy = true
+                    }
+                )
             }
             ToolbarItem(placement: .topBarTrailing) {
                 if shouldShowMakeVideoButton {
@@ -2173,6 +2212,118 @@ struct Generate: View {
 
 }
 
+
+// MARK: - Dummy pickers (stand-ins for Team 1 / Team 2 surfaces)
+
+/// Stand-in for Team 2's song picker. Opens a `fileImporter`, copies the
+/// picked audio file to Documents/ (flat), and reports the filename back so
+/// the host writes it to `LocalStore.uploadSong`. Dismisses on swipe-down or
+/// Done.
+private struct SongPickerDummy: View {
+    let onPicked: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var importerPresented = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.background.ignoresSafeArea()
+                VStack(spacing: 18) {
+                    Image(systemName: "music.note")
+                        .font(.system(size: 44, weight: .light))
+                        .foregroundStyle(Theme.accent)
+                    Text("Song picker")
+                        .font(.title2.bold())
+                        .foregroundStyle(Theme.onSurface)
+                    Text("Dummy. Real screen owned by Team 2.")
+                        .font(.footnote)
+                        .foregroundStyle(Theme.muted)
+                    Button("Pick audio file") { importerPresented = true }
+                        .buttonStyle(AccentButtonStyle())
+                        .padding(.horizontal, 24)
+                    if let errorMessage {
+                        Text(errorMessage)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .padding(.horizontal, 24)
+                    }
+                }
+            }
+            .navigationTitle("Song picker")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                        .foregroundStyle(Theme.muted)
+                }
+            }
+            .toolbarBackground(Theme.background, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .fileImporter(
+                isPresented: $importerPresented,
+                allowedContentTypes: [.audio],
+                allowsMultipleSelection: false
+            ) { result in
+                guard case .success(let urls) = result, let url = urls.first
+                else { return }
+                let scoped = url.startAccessingSecurityScopedResource()
+                defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                do {
+                    let filename = try LocalStore.saveSongToDocuments(url)
+                    onPicked(filename)
+                    dismiss()
+                } catch {
+                    errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+}
+
+/// Stand-in for Team 1's project picker. Undefined for now per spec.
+/// First-launch flow auto-creates Project=1 so this screen isn't required
+/// to start using Generate.
+private struct ProjectPickerDummy: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.background.ignoresSafeArea()
+                VStack(spacing: 18) {
+                    Image(systemName: "rectangle.stack.fill")
+                        .font(.system(size: 44, weight: .light))
+                        .foregroundStyle(Theme.accent)
+                    Text("Project picker")
+                        .font(.title2.bold())
+                        .foregroundStyle(Theme.onSurface)
+                    Text("Dummy. Real screen owned by Team 1.\nUndefined for now.")
+                        .font(.footnote)
+                        .foregroundStyle(Theme.muted)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                    if let current = LocalStore.project {
+                        Text("Current project: \(current)")
+                            .font(.caption)
+                            .foregroundStyle(Theme.muted)
+                            .padding(.top, 12)
+                    }
+                }
+            }
+            .navigationTitle("Project picker")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                        .foregroundStyle(Theme.muted)
+                }
+            }
+            .toolbarBackground(Theme.background, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+        }
+    }
+}
 
 // MARK: - Kinetic onboarding sandbox
 //
@@ -2964,7 +3115,7 @@ private struct GridView: View {
 // MARK: - Derive
 
 private struct DeriveView: View {
-    let image: GeneratedImage
+    let image: GeneratedImage?
     @Bindable var viewModel: GenerateViewModel
     @State private var tweak: String = ""
     @FocusState private var focused: Bool
@@ -2975,18 +3126,24 @@ private struct DeriveView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // Compact context header — thumbnail + "from this one" framing.
-            // Keeps the source picture visible while leaving room for the input.
             HStack(spacing: 12) {
-                AuthorizedImage(filename: image.file)
-                    .frame(width: 64, height: 64)
-                    .clipShape(.rect(cornerRadius: 12))
-                    .accessibilityLabel("Picture you tapped")
+                if let image {
+                    AuthorizedImage(filename: image.file)
+                        .frame(width: 64, height: 64)
+                        .clipShape(.rect(cornerRadius: 12))
+                        .accessibilityLabel("Picture you tapped")
+                } else {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 28, weight: .light))
+                        .foregroundStyle(Theme.accent)
+                        .frame(width: 64, height: 64)
+                        .background(Theme.surface, in: .rect(cornerRadius: 12))
+                }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("From this one")
+                    Text(image == nil ? "Your first batch" : "From this one")
                         .font(.footnote)
                         .foregroundStyle(Theme.muted)
-                    Text("Tell me what to change")
+                    Text(image == nil ? "Tell me what to make" : "Tell me what to change")
                         .font(.title3.bold())
                         .foregroundStyle(Theme.onSurface)
                 }
@@ -2995,10 +3152,10 @@ private struct DeriveView: View {
             .padding(.horizontal, 16)
             .padding(.top, 8)
 
-            // Vertical-axis TextField gets a real placeholder and grows naturally.
-            // No overlay hack, no alignment drift on first keystroke.
             TextField(
-                "Try \u{201C}sunset\u{201D} or \u{201C}add fireworks\u{201D}",
+                image == nil
+                    ? "Try \u{201C}sunset cityscape\u{201D} or \u{201C}rainy neon\u{201D}"
+                    : "Try \u{201C}sunset\u{201D} or \u{201C}add fireworks\u{201D}",
                 text: $tweak,
                 axis: .vertical
             )
@@ -3014,12 +3171,9 @@ private struct DeriveView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Theme.background.ignoresSafeArea())
-        .navigationTitle("Change it")
+        .navigationTitle(image == nil ? "Generate" : "Change it")
         .navigationBarTitleDisplayMode(.inline)
-        // Auto-focus the field so the keyboard rises immediately — this screen
-        // exists for one thing.
         .onAppear { focused = true }
-        // Keyboard accessory: Done button to dismiss without losing the draft.
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
@@ -3027,18 +3181,20 @@ private struct DeriveView: View {
                     .font(.body.weight(.semibold))
             }
         }
-        // CTA in safeAreaInset so the keyboard pushes it up instead of covering it.
-        // Material extends to the bottom safe area automatically.
         .safeAreaInset(edge: .bottom) {
             Button {
                 focused = false
-                viewModel.submitDerivation(from: image, tweak: trimmed)
+                if let image {
+                    viewModel.submitDerivation(from: image, tweak: trimmed)
+                } else {
+                    viewModel.submitInitial(prompt: trimmed)
+                }
             } label: {
                 HStack(spacing: 6) {
                     if trimmed.isEmpty {
-                        Text("Type to make new ones")
+                        Text(image == nil ? "Type to make your first ones" : "Type to make new ones")
                     } else {
-                        Text("Make new ones")
+                        Text(image == nil ? "Make my first ones" : "Make new ones")
                         Text("·").opacity(0.5)
                         Image(systemName: "bolt.fill").font(.footnote)
                         Text("\(viewModel.generationCost)").monospacedDigit()

@@ -50,20 +50,21 @@ open class ApplePayRouteAPI {
 
     /**
 
+     - parameter credit: (form)  
+     - parameter currency: (form)  
+     - parameter id: (form) uuid v7 
+     - parameter jws: (form)  
+     - parameter loaded: (form)  
+     - parameter price: (form)  
+     - parameter productId: (form)  
+     - parameter status: (form)  
+     - parameter transactionId: (form)  
      - parameter userId: (form)  
-     - parameter byColumn: (form)  (optional)
-     - parameter byFields: (form)  (optional)
-     - parameter byId: (form)  (optional)
-     - parameter delete: (form)  (optional)
-     - parameter paginate: (form)  (optional)
-     - parameter search: (form)  (optional)
-     - parameter update: (form)  (optional)
-     - parameter upsert: (form)  (optional)
      - parameter apiConfiguration: The configuration for the http request.
-     - returns: ApplePayServerRequest
+     - returns: ApplePay
      */
-    open class func applePay(userId: String, byColumn: ApplePayByColumn? = nil, byFields: ApplePayByFields? = nil, byId: ApplePayById? = nil, delete: ApplePayDelete? = nil, paginate: ApplePayPaginate? = nil, search: ApplePaySearch? = nil, update: ApplePayUpdate? = nil, upsert: ApplePayUpsert? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> ApplePayServerRequest {
-        return try await applePayWithRequestBuilder(userId: userId, byColumn: byColumn, byFields: byFields, byId: byId, delete: delete, paginate: paginate, search: search, update: update, upsert: upsert, apiConfiguration: apiConfiguration).execute().body
+    open class func applePay(credit: Int64, currency: String, id: UUID, jws: String, loaded: Bool, price: Int64, productId: String, status: ApplePayStatus, transactionId: String, userId: String, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> ApplePay {
+        return try await applePayWithRequestBuilder(credit: credit, currency: currency, id: id, jws: jws, loaded: loaded, price: price, productId: productId, status: status, transactionId: transactionId, userId: userId, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -71,30 +72,32 @@ open class ApplePayRouteAPI {
      - Bearer Token:
        - type: http
        - name: bearer
+     - parameter credit: (form)  
+     - parameter currency: (form)  
+     - parameter id: (form) uuid v7 
+     - parameter jws: (form)  
+     - parameter loaded: (form)  
+     - parameter price: (form)  
+     - parameter productId: (form)  
+     - parameter status: (form)  
+     - parameter transactionId: (form)  
      - parameter userId: (form)  
-     - parameter byColumn: (form)  (optional)
-     - parameter byFields: (form)  (optional)
-     - parameter byId: (form)  (optional)
-     - parameter delete: (form)  (optional)
-     - parameter paginate: (form)  (optional)
-     - parameter search: (form)  (optional)
-     - parameter update: (form)  (optional)
-     - parameter upsert: (form)  (optional)
      - parameter apiConfiguration: The configuration for the http request.
-     - returns: RequestBuilder<ApplePayServerRequest> 
+     - returns: RequestBuilder<ApplePay> 
      */
-    open class func applePayWithRequestBuilder(userId: String, byColumn: ApplePayByColumn? = nil, byFields: ApplePayByFields? = nil, byId: ApplePayById? = nil, delete: ApplePayDelete? = nil, paginate: ApplePayPaginate? = nil, search: ApplePaySearch? = nil, update: ApplePayUpdate? = nil, upsert: ApplePayUpsert? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<ApplePayServerRequest> {
+    open class func applePayWithRequestBuilder(credit: Int64, currency: String, id: UUID, jws: String, loaded: Bool, price: Int64, productId: String, status: ApplePayStatus, transactionId: String, userId: String, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<ApplePay> {
         let localVariablePath = "/apple_pay"
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         var localVariableParameters: [String: any Sendable] = [:]
-        if let value = byColumn { appendBracket(into: &localVariableParameters, baseName: "by_column", value: value) }
-        if let value = byFields { appendBracket(into: &localVariableParameters, baseName: "by_fields", value: value) }
-        if let value = byId { appendBracket(into: &localVariableParameters, baseName: "by_id", value: value) }
-        if let value = delete { appendBracket(into: &localVariableParameters, baseName: "delete", value: value) }
-        if let value = paginate { appendBracket(into: &localVariableParameters, baseName: "paginate", value: value) }
-        if let value = search { appendBracket(into: &localVariableParameters, baseName: "search", value: value) }
-        if let value = update { appendBracket(into: &localVariableParameters, baseName: "update", value: value) }
-        if let value = upsert { appendBracket(into: &localVariableParameters, baseName: "upsert", value: value) }
+        appendBracket(into: &localVariableParameters, baseName: "credit", value: credit)
+        appendBracket(into: &localVariableParameters, baseName: "currency", value: currency)
+        appendBracket(into: &localVariableParameters, baseName: "id", value: id)
+        appendBracket(into: &localVariableParameters, baseName: "jws", value: jws)
+        appendBracket(into: &localVariableParameters, baseName: "loaded", value: loaded)
+        appendBracket(into: &localVariableParameters, baseName: "price", value: price)
+        appendBracket(into: &localVariableParameters, baseName: "product_id", value: productId)
+        appendBracket(into: &localVariableParameters, baseName: "status", value: status)
+        appendBracket(into: &localVariableParameters, baseName: "transaction_id", value: transactionId)
         appendBracket(into: &localVariableParameters, baseName: "user_id", value: userId)
         
 
@@ -106,7 +109,7 @@ open class ApplePayRouteAPI {
 
         let localVariableHeaderParameters = APIHelper.rejectNilHeaders(localVariableNillableHeaders)
 
-        let localVariableRequestBuilder: RequestBuilder<ApplePayServerRequest>.Type = apiConfiguration.requestBuilderFactory.getBuilder()
+        let localVariableRequestBuilder: RequestBuilder<ApplePay>.Type = apiConfiguration.requestBuilderFactory.getBuilder()
 
         return localVariableRequestBuilder.init(method: "POST", URLString: (localVariableUrlComponents?.string ?? localVariableURLString), parameters: localVariableParameters, headers: localVariableHeaderParameters, requiresAuthentication: true, apiConfiguration: apiConfiguration)
     }

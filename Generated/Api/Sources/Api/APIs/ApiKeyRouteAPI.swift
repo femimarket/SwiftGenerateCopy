@@ -50,20 +50,14 @@ open class ApiKeyRouteAPI {
 
     /**
 
+     - parameter id: (form)  
      - parameter userId: (form)  
-     - parameter byColumn: (form)  (optional)
-     - parameter byFields: (form)  (optional)
-     - parameter byId: (form)  (optional)
-     - parameter delete: (form)  (optional)
-     - parameter paginate: (form)  (optional)
-     - parameter search: (form)  (optional)
-     - parameter update: (form)  (optional)
-     - parameter upsert: (form)  (optional)
+     - parameter key: (form)  (optional)
      - parameter apiConfiguration: The configuration for the http request.
-     - returns: ApiKeyServerRequest
+     - returns: ApiKey
      */
-    open class func apiKey(userId: String, byColumn: ApiKeyByColumn? = nil, byFields: ApiKeyByFields? = nil, byId: ApiKeyById? = nil, delete: ApiKeyDelete? = nil, paginate: ApiKeyPaginate? = nil, search: ApiKeySearch? = nil, update: ApiKeyUpdate? = nil, upsert: ApiKeyUpsert? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> ApiKeyServerRequest {
-        return try await apiKeyWithRequestBuilder(userId: userId, byColumn: byColumn, byFields: byFields, byId: byId, delete: delete, paginate: paginate, search: search, update: update, upsert: upsert, apiConfiguration: apiConfiguration).execute().body
+    open class func apiKey(id: UUID, userId: String, key: String? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> ApiKey {
+        return try await apiKeyWithRequestBuilder(id: id, userId: userId, key: key, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -71,30 +65,18 @@ open class ApiKeyRouteAPI {
      - Bearer Token:
        - type: http
        - name: bearer
+     - parameter id: (form)  
      - parameter userId: (form)  
-     - parameter byColumn: (form)  (optional)
-     - parameter byFields: (form)  (optional)
-     - parameter byId: (form)  (optional)
-     - parameter delete: (form)  (optional)
-     - parameter paginate: (form)  (optional)
-     - parameter search: (form)  (optional)
-     - parameter update: (form)  (optional)
-     - parameter upsert: (form)  (optional)
+     - parameter key: (form)  (optional)
      - parameter apiConfiguration: The configuration for the http request.
-     - returns: RequestBuilder<ApiKeyServerRequest> 
+     - returns: RequestBuilder<ApiKey> 
      */
-    open class func apiKeyWithRequestBuilder(userId: String, byColumn: ApiKeyByColumn? = nil, byFields: ApiKeyByFields? = nil, byId: ApiKeyById? = nil, delete: ApiKeyDelete? = nil, paginate: ApiKeyPaginate? = nil, search: ApiKeySearch? = nil, update: ApiKeyUpdate? = nil, upsert: ApiKeyUpsert? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<ApiKeyServerRequest> {
+    open class func apiKeyWithRequestBuilder(id: UUID, userId: String, key: String? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<ApiKey> {
         let localVariablePath = "/api_key"
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         var localVariableParameters: [String: any Sendable] = [:]
-        if let value = byColumn { appendBracket(into: &localVariableParameters, baseName: "by_column", value: value) }
-        if let value = byFields { appendBracket(into: &localVariableParameters, baseName: "by_fields", value: value) }
-        if let value = byId { appendBracket(into: &localVariableParameters, baseName: "by_id", value: value) }
-        if let value = delete { appendBracket(into: &localVariableParameters, baseName: "delete", value: value) }
-        if let value = paginate { appendBracket(into: &localVariableParameters, baseName: "paginate", value: value) }
-        if let value = search { appendBracket(into: &localVariableParameters, baseName: "search", value: value) }
-        if let value = update { appendBracket(into: &localVariableParameters, baseName: "update", value: value) }
-        if let value = upsert { appendBracket(into: &localVariableParameters, baseName: "upsert", value: value) }
+        appendBracket(into: &localVariableParameters, baseName: "id", value: id)
+        if let value = key { appendBracket(into: &localVariableParameters, baseName: "key", value: value) }
         appendBracket(into: &localVariableParameters, baseName: "user_id", value: userId)
         
 
@@ -106,7 +88,7 @@ open class ApiKeyRouteAPI {
 
         let localVariableHeaderParameters = APIHelper.rejectNilHeaders(localVariableNillableHeaders)
 
-        let localVariableRequestBuilder: RequestBuilder<ApiKeyServerRequest>.Type = apiConfiguration.requestBuilderFactory.getBuilder()
+        let localVariableRequestBuilder: RequestBuilder<ApiKey>.Type = apiConfiguration.requestBuilderFactory.getBuilder()
 
         return localVariableRequestBuilder.init(method: "POST", URLString: (localVariableUrlComponents?.string ?? localVariableURLString), parameters: localVariableParameters, headers: localVariableHeaderParameters, requiresAuthentication: true, apiConfiguration: apiConfiguration)
     }

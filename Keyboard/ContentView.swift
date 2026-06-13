@@ -53,7 +53,7 @@ private struct AccentButtonStyle: ButtonStyle {
 
 struct ContentView: View {
     enum Demo: String, Identifiable {
-        case lyricSheet, projectSwitcher, titleMenu, titleLongPress, finalPattern, scalingPattern, dualTrigger
+        case lyricSheet, projectSwitcher, titleMenu, titleLongPress, finalPattern, scalingPattern, dualTrigger, stackedTitleRank, startCta, plusMenu, plusMenuTriple
         var id: String { rawValue }
     }
 
@@ -115,6 +115,30 @@ struct ContentView: View {
                         title: "FINAL: editorial toolbar expansion",
                         subtitle: "Tap title \u{2192} toolbar grows into two branded cards. No system sheet."
                     ) { presenting = .dualTrigger }
+
+                    menuRow(
+                        index: 8,
+                        title: "Tier-shape glyph (no chevron)",
+                        subtitle: "Shape ladder \u{2192} rank tier. Same glyph is the affordance."
+                    ) { presenting = .stackedTitleRank }
+
+                    menuRow(
+                        index: 9,
+                        title: "Empty-state Start CTA",
+                        subtitle: "Inline button in empty grid. Closes the loop with the existing copy."
+                    ) { presenting = .startCta }
+
+                    menuRow(
+                        index: 10,
+                        title: "Plus button \u{2192} menu (Generate / Upload)",
+                        subtitle: "Photos/Notes pattern. One chrome element, two peer actions in a menu."
+                    ) { presenting = .plusMenu }
+
+                    menuRow(
+                        index: 11,
+                        title: "Iterate trigger inside DeriveView",
+                        subtitle: "Per-image operation lives on the working screen, not in the + menu."
+                    ) { presenting = .plusMenuTriple }
                     }
                     .padding(.horizontal, 24)
                 }
@@ -137,6 +161,14 @@ struct ContentView: View {
                 ScalingPatternDemo(onClose: { presenting = nil })
             case .dualTrigger:
                 DualTriggerDemo(onClose: { presenting = nil })
+            case .stackedTitleRank:
+                StackedTitleRankDemo(onClose: { presenting = nil })
+            case .startCta:
+                StartCtaDemo(onClose: { presenting = nil })
+            case .plusMenu:
+                PlusMenuDemo(onClose: { presenting = nil })
+            case .plusMenuTriple:
+                PlusMenuTripleDemo(onClose: { presenting = nil })
             }
         }
     }
@@ -1347,6 +1379,388 @@ private struct SongPickerPlaceholder: View {
             }
             .toolbarBackground(Theme.background, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
+        }
+    }
+}
+
+// MARK: - Demo 8: Tier-shape glyph (no chevron)
+//
+// The chevron is replaced by a geometric glyph whose SHAPE encodes rank tier
+// and whose COLOR reinforces it. Shape ladder climbs in geometric complexity:
+// circle → triangle → diamond → hexagon → star. The glyph is both the rank
+// indicator AND the tap affordance — one symbol, two jobs. No chevron, no
+// rank text, no chrome growth. Two reinforcing axes (shape + color) mean
+// the user reads tier at a glance and learns the system passively.
+
+private struct StackedTitleRankDemo: View {
+    let onClose: () -> Void
+    @State private var state = DemoState()
+    @State private var hasSong = true
+    @State private var tierIndex = 0
+    @State private var pulse = false
+    @State private var pulse2 = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private let tiers: [(name: String, color: Color, highlight: Color, glyph: String)] = [
+        ("mini7",         Color(red: 0.35, green: 0.78, blue: 0.98), Color(red: 0.70, green: 0.95, blue: 1.00), "circle.fill"),
+        ("small42",       Color(red: 0.30, green: 0.85, blue: 0.55), Color(red: 0.60, green: 1.00, blue: 0.80), "triangle.fill"),
+        ("medium317",     Color(red: 1.00, green: 0.78, blue: 0.20), Color(red: 1.00, green: 0.95, blue: 0.55), "diamond.fill"),
+        ("large4821",     Color(red: 1.00, green: 0.50, blue: 0.20), Color(red: 1.00, green: 0.75, blue: 0.45), "hexagon.fill"),
+        ("ultimate12345", Color(red: 1.00, green: 0.20, blue: 0.65), Color(red: 1.00, green: 0.60, blue: 0.88), "star.fill"),
+    ]
+
+    private var currentTier: (name: String, color: Color, highlight: Color, glyph: String) { tiers[tierIndex] }
+
+    private var tierGradient: LinearGradient {
+        LinearGradient(
+            colors: [currentTier.highlight, currentTier.color],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    @ViewBuilder
+    private var tierGlyph: some View {
+        Image(systemName: currentTier.glyph)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(tierGradient)
+    }
+
+    @ViewBuilder
+    private var invitingTierGlyph: some View {
+        ZStack {
+            if reduceMotion {
+                Circle()
+                    .stroke(currentTier.color.opacity(0.45), lineWidth: 1.5)
+                    .frame(width: 26, height: 26)
+            } else {
+                Circle()
+                    .stroke(currentTier.color, lineWidth: 1.5)
+                    .frame(width: 22, height: 22)
+                    .scaleEffect(pulse ? 1.7 : 1.0)
+                    .opacity(pulse ? 0.0 : 0.6)
+                Circle()
+                    .stroke(currentTier.color, lineWidth: 1.5)
+                    .frame(width: 22, height: 22)
+                    .scaleEffect(pulse2 ? 1.7 : 1.0)
+                    .opacity(pulse2 ? 0.0 : 0.6)
+            }
+            Image(systemName: currentTier.glyph)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(tierGradient)
+                .symbolEffect(.pulse, options: .repeating, isActive: !reduceMotion)
+        }
+        .onAppear {
+            guard !reduceMotion else { return }
+            pulse = false
+            pulse2 = false
+            withAnimation(.easeOut(duration: 1.6).repeatForever(autoreverses: false)) {
+                pulse = true
+            }
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(800))
+                withAnimation(.easeOut(duration: 1.6).repeatForever(autoreverses: false)) {
+                    pulse2 = true
+                }
+            }
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.background.ignoresSafeArea()
+                VStack(spacing: 14) {
+                    Spacer()
+                    HStack(spacing: 10) {
+                        Image(systemName: currentTier.glyph)
+                            .font(.title2)
+                            .foregroundStyle(tierGradient)
+                        Text(currentTier.name)
+                            .font(.headline)
+                            .foregroundStyle(currentTier.color)
+                    }
+                    Text("The glyph above is the tier indicator AND the tap affordance. Shape climbs with rank; color reinforces. No chevron, no rank text in chrome.")
+                        .font(.subheadline).foregroundStyle(Theme.muted)
+                        .multilineTextAlignment(.center).padding(.horizontal, 32)
+                    Spacer()
+                    Button("Cycle rank tier") {
+                        tierIndex = (tierIndex + 1) % tiers.count
+                    }
+                    .buttonStyle(AccentButtonStyle(fullWidth: false))
+                    Button(hasSong ? "Simulate: clear song" : "Simulate: pick a song") {
+                        hasSong.toggle()
+                    }
+                    .buttonStyle(AccentButtonStyle(fullWidth: false))
+                    .padding(.bottom, 40)
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close", action: onClose).foregroundStyle(Theme.muted)
+                }
+                ToolbarItem(placement: .principal) {
+                    Button { } label: {
+                        HStack(spacing: 6) {
+                            if hasSong {
+                                Text(state.currentProject.songName)
+                                    .font(.headline)
+                                    .foregroundStyle(Theme.onSurface)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                                tierGlyph
+                            } else {
+                                Text(currentTier.name)
+                                    .font(.headline)
+                                    .foregroundStyle(currentTier.color)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                                invitingTierGlyph
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .toolbarBackground(Theme.background, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+        }
+    }
+}
+
+// MARK: - Demo 9: Empty-state Start CTA
+//
+// Mirrors the Generate target's empty grid state: icon + "No pictures yet" +
+// body copy + a prominent Start button beneath. The button is the missing
+// link in the production code — it closes the loop on the "Tap Start" copy
+// that currently points at nothing. Tapping it cycles to a mock "Generating"
+// state and back so you can see the transition.
+
+private struct StartCtaDemo: View {
+    let onClose: () -> Void
+    @State private var isGenerating = false
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.background.ignoresSafeArea()
+                if isGenerating {
+                    VStack(spacing: 16) {
+                        ProgressView()
+                            .tint(.white)
+                            .scaleEffect(1.4)
+                        Text("Generating…")
+                            .font(.headline)
+                            .foregroundStyle(Theme.onSurface)
+                    }
+                } else {
+                    VStack(spacing: 16) {
+                        Spacer()
+                        Image(systemName: "photo.on.rectangle")
+                            .font(.system(size: 48, weight: .light))
+                            .foregroundStyle(Theme.muted)
+                        Text("No pictures yet")
+                            .font(.headline)
+                            .foregroundStyle(Theme.onSurface)
+                        Text("Tap Start to make your first ones.")
+                            .font(.subheadline)
+                            .foregroundStyle(Theme.muted)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 40)
+                        Button("Start") {
+                            isGenerating = true
+                            Task { @MainActor in
+                                try? await Task.sleep(for: .seconds(1.6))
+                                isGenerating = false
+                            }
+                        }
+                        .buttonStyle(AccentButtonStyle(fullWidth: false))
+                        .padding(.top, 8)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close", action: onClose).foregroundStyle(Theme.muted)
+                }
+            }
+            .toolbarBackground(Theme.background, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+        }
+    }
+}
+
+// MARK: - Demo 10: Plus button → menu (Generate / Upload)
+//
+// topBarTrailing "+" opens a Menu with two peer actions: Generate (primary,
+// shows cost inline) and Upload from Photos (secondary). One chrome element,
+// two equal-tier intents — the canonical Apple pattern (Photos, Notes,
+// Mail compose all use this). No long-press, no hidden affordance; the menu
+// IS the choice surface.
+
+private struct PlusMenuDemo: View {
+    let onClose: () -> Void
+    @State private var lastPicked: String?
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.background.ignoresSafeArea()
+                VStack(spacing: 16) {
+                    Spacer()
+                    Image(systemName: "photo.on.rectangle")
+                        .font(.system(size: 48, weight: .light))
+                        .foregroundStyle(Theme.muted)
+                    Text("No pictures yet")
+                        .font(.headline)
+                        .foregroundStyle(Theme.onSurface)
+                    Text("Tap + above to add your first picture.")
+                        .font(.subheadline)
+                        .foregroundStyle(Theme.muted)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
+                    if let picked = lastPicked {
+                        Text("Picked: \(picked)")
+                            .font(.footnote)
+                            .foregroundStyle(Theme.accentMagenta)
+                            .padding(.top, 8)
+                    }
+                    Spacer()
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close", action: onClose).foregroundStyle(Theme.muted)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button {
+                            lastPicked = "Generate (50 credits)"
+                        } label: {
+                            Label("Generate", systemImage: "sparkles")
+                        }
+                        Button {
+                            lastPicked = "Upload from Photos"
+                        } label: {
+                            Label("Upload from Photos", systemImage: "photo")
+                        }
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(Theme.onSurface)
+                    }
+                }
+            }
+            .toolbarBackground(Theme.background, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+        }
+    }
+}
+
+// MARK: - Demo 11: Iterate trigger inside DeriveView
+//
+// You can only iterate over a specific image, and you only reach a specific
+// image by tapping it in the grid \u{2192} DeriveView opens for that image.
+// So the Iterate trigger logically belongs INSIDE DeriveView, not in the +
+// menu. This demo mocks the DeriveView layout and adds the Iterate trigger
+// as a trailing toolbar item — a peer to navigation, scoped to the image
+// currently being worked on.
+
+private struct PlusMenuTripleDemo: View {
+    let onClose: () -> Void
+    @State private var tweak: String = ""
+    @State private var lastTriggered: String?
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.background.ignoresSafeArea()
+                VStack(alignment: .leading, spacing: 16) {
+                    // Mock the DeriveView header — source thumbnail + framing.
+                    HStack(spacing: 12) {
+                        LinearGradient(
+                            colors: [Theme.accentMagenta, Theme.accentBlue],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        )
+                        .frame(width: 64, height: 64)
+                        .clipShape(.rect(cornerRadius: 12))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("From this one")
+                                .font(.footnote)
+                                .foregroundStyle(Theme.muted)
+                            Text("Tell me what to change")
+                                .font(.title3.bold())
+                                .foregroundStyle(Theme.onSurface)
+                        }
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+
+                    TextField(
+                        "Try \u{201C}sunset\u{201D} or \u{201C}add fireworks\u{201D}",
+                        text: $tweak,
+                        axis: .vertical
+                    )
+                    .font(.body)
+                    .lineLimit(3...8)
+                    .foregroundStyle(Theme.onSurface)
+                    .padding(16)
+                    .background(Theme.surface, in: .rect(cornerRadius: 16))
+                    .padding(.horizontal, 16)
+
+                    if let triggered = lastTriggered {
+                        Text("Triggered: \(triggered)")
+                            .font(.footnote)
+                            .foregroundStyle(Theme.accentMagenta)
+                            .padding(.horizontal, 16)
+                    }
+
+                    Spacer(minLength: 0)
+                }
+            }
+            .navigationTitle("Change it")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close", action: onClose).foregroundStyle(Theme.muted)
+                }
+                // The new trigger: Iterate lives here, scoped to this image.
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        lastTriggered = "Iterate (fast exploratory loop on this image)"
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "wand.and.stars")
+                            Text("Iterate")
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Theme.accentMagenta)
+                    }
+                }
+            }
+            .toolbarBackground(Theme.background, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .safeAreaInset(edge: .bottom) {
+                Button {
+                    lastTriggered = "Make new ones (deliberate derive)"
+                } label: {
+                    Text(tweak.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                         ? "Type to make new ones"
+                         : "Make new ones")
+                }
+                .buttonStyle(AccentButtonStyle())
+                .disabled(tweak.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .padding(16)
+                .background(.regularMaterial)
+            }
         }
     }
 }

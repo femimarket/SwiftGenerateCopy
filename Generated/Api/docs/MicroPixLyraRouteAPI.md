@@ -9,7 +9,7 @@ Method | HTTP request | Description
 
 # **microPixLyra**
 ```swift
-    open class func microPixLyra(userId: String, byColumn: MicroPixLyraByColumn? = nil, byFields: MicroPixLyraByFields? = nil, byId: MicroPixLyraById? = nil, delete: MicroPixLyraDelete? = nil, paginate: MicroPixLyraPaginate? = nil, search: MicroPixLyraSearch? = nil, update: MicroPixLyraUpdate? = nil, upsert: MicroPixLyraUpsert? = nil, completion: @escaping (_ data: MicroPixLyraServerRequest?, _ error: Error?) -> Void)
+    open class func microPixLyra(userId: String, byColumn: MicroPixLyraByColumn? = nil, byFields: MicroPixLyraByFields? = nil, byId: MicroPixLyraById? = nil, delete: MicroPixLyraDelete? = nil, paginate: MicroPixLyraPaginate? = nil, search: MicroPixLyraSearch? = nil, update: MicroPixLyraUpdate? = nil, upsert: MicroPixLyraUpsert? = nil, upsert1: MicroPixLyraUpsert1? = nil, completion: @escaping (_ data: MicroPixLyraServerRequest?, _ error: Error?) -> Void)
 ```
 
 
@@ -28,8 +28,9 @@ let paginate = micro_pix_lyra.Paginate(data: [MicroPixLyra(credit: 123, file: "f
 let search = micro_pix_lyra.Search(data: [MicroPixLyra(credit: 123, file: "file_example", id: 123, prompt: "prompt_example", requestId: "requestId_example", status: Status(), userId: "userId_example")], query: "query_example") // MicroPixLyraSearch |  (optional)
 let update = micro_pix_lyra.Update(data: [MicroPixLyra(credit: 123, file: "file_example", id: 123, prompt: "prompt_example", requestId: "requestId_example", status: Status(), userId: "userId_example")], inputs: [micro_pix_lyra.UpdateItem(fields: "TODO", id: 123)]) // MicroPixLyraUpdate |  (optional)
 let upsert = micro_pix_lyra.Upsert(data: [MicroPixLyra(credit: 123, file: "file_example", id: 123, prompt: "prompt_example", requestId: "requestId_example", status: Status(), userId: "userId_example")]) // MicroPixLyraUpsert |  (optional)
+let upsert1 = micro_pix_lyra.Upsert1(data: MicroPixLyra(credit: 123, file: "file_example", id: 123, prompt: "prompt_example", requestId: "requestId_example", status: Status(), userId: "userId_example")) // MicroPixLyraUpsert1 |  (optional)
 
-MicroPixLyraRouteAPI.microPixLyra(userId: userId, byColumn: byColumn, byFields: byFields, byId: byId, delete: delete, paginate: paginate, search: search, update: update, upsert: upsert) { (response, error) in
+MicroPixLyraRouteAPI.microPixLyra(userId: userId, byColumn: byColumn, byFields: byFields, byId: byId, delete: delete, paginate: paginate, search: search, update: update, upsert: upsert, upsert1: upsert1) { (response, error) in
     guard error == nil else {
         print(error)
         return
@@ -54,6 +55,7 @@ Name | Type | Description  | Notes
  **search** | [**MicroPixLyraSearch**](MicroPixLyraSearch.md) |  | [optional] 
  **update** | [**MicroPixLyraUpdate**](MicroPixLyraUpdate.md) |  | [optional] 
  **upsert** | [**MicroPixLyraUpsert**](MicroPixLyraUpsert.md) |  | [optional] 
+ **upsert1** | [**MicroPixLyraUpsert1**](MicroPixLyraUpsert1.md) |  | [optional] 
 
 ### Return type
 

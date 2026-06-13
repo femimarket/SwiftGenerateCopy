@@ -17,9 +17,10 @@ public struct SolanaServerRequest: Sendable, Codable, Hashable {
     public var search: SolanaSearch?
     public var update: SolanaUpdate?
     public var upsert: SolanaUpsert?
+    public var upsert1: SolanaUpsert1?
     public var userId: String
 
-    public init(byColumn: SolanaByColumn? = nil, byFields: SolanaByFields? = nil, byId: SolanaById? = nil, delete: SolanaDelete? = nil, paginate: SolanaPaginate? = nil, search: SolanaSearch? = nil, update: SolanaUpdate? = nil, upsert: SolanaUpsert? = nil, userId: String) {
+    public init(byColumn: SolanaByColumn? = nil, byFields: SolanaByFields? = nil, byId: SolanaById? = nil, delete: SolanaDelete? = nil, paginate: SolanaPaginate? = nil, search: SolanaSearch? = nil, update: SolanaUpdate? = nil, upsert: SolanaUpsert? = nil, upsert1: SolanaUpsert1? = nil, userId: String) {
         self.byColumn = byColumn
         self.byFields = byFields
         self.byId = byId
@@ -28,6 +29,7 @@ public struct SolanaServerRequest: Sendable, Codable, Hashable {
         self.search = search
         self.update = update
         self.upsert = upsert
+        self.upsert1 = upsert1
         self.userId = userId
     }
 
@@ -40,6 +42,7 @@ public struct SolanaServerRequest: Sendable, Codable, Hashable {
         case search
         case update
         case upsert
+        case upsert1
         case userId = "user_id"
     }
 
@@ -55,6 +58,7 @@ public struct SolanaServerRequest: Sendable, Codable, Hashable {
         try container.encodeIfPresent(search, forKey: .search)
         try container.encodeIfPresent(update, forKey: .update)
         try container.encodeIfPresent(upsert, forKey: .upsert)
+        try container.encodeIfPresent(upsert1, forKey: .upsert1)
         try container.encode(userId, forKey: .userId)
     }
 }

@@ -59,11 +59,12 @@ open class MicroPixVegaRouteAPI {
      - parameter search: (form)  (optional)
      - parameter update: (form)  (optional)
      - parameter upsert: (form)  (optional)
+     - parameter upsert1: (form)  (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: MicroPixVegaServerRequest
      */
-    open class func microPixVega(userId: String, byColumn: MicroPixVegaByColumn? = nil, byFields: MicroPixVegaByFields? = nil, byId: MicroPixVegaById? = nil, delete: MicroPixVegaDelete? = nil, paginate: MicroPixVegaPaginate? = nil, search: MicroPixVegaSearch? = nil, update: MicroPixVegaUpdate? = nil, upsert: MicroPixVegaUpsert? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> MicroPixVegaServerRequest {
-        return try await microPixVegaWithRequestBuilder(userId: userId, byColumn: byColumn, byFields: byFields, byId: byId, delete: delete, paginate: paginate, search: search, update: update, upsert: upsert, apiConfiguration: apiConfiguration).execute().body
+    open class func microPixVega(userId: String, byColumn: MicroPixVegaByColumn? = nil, byFields: MicroPixVegaByFields? = nil, byId: MicroPixVegaById? = nil, delete: MicroPixVegaDelete? = nil, paginate: MicroPixVegaPaginate? = nil, search: MicroPixVegaSearch? = nil, update: MicroPixVegaUpdate? = nil, upsert: MicroPixVegaUpsert? = nil, upsert1: MicroPixVegaUpsert1? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> MicroPixVegaServerRequest {
+        return try await microPixVegaWithRequestBuilder(userId: userId, byColumn: byColumn, byFields: byFields, byId: byId, delete: delete, paginate: paginate, search: search, update: update, upsert: upsert, upsert1: upsert1, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -80,10 +81,11 @@ open class MicroPixVegaRouteAPI {
      - parameter search: (form)  (optional)
      - parameter update: (form)  (optional)
      - parameter upsert: (form)  (optional)
+     - parameter upsert1: (form)  (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<MicroPixVegaServerRequest> 
      */
-    open class func microPixVegaWithRequestBuilder(userId: String, byColumn: MicroPixVegaByColumn? = nil, byFields: MicroPixVegaByFields? = nil, byId: MicroPixVegaById? = nil, delete: MicroPixVegaDelete? = nil, paginate: MicroPixVegaPaginate? = nil, search: MicroPixVegaSearch? = nil, update: MicroPixVegaUpdate? = nil, upsert: MicroPixVegaUpsert? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<MicroPixVegaServerRequest> {
+    open class func microPixVegaWithRequestBuilder(userId: String, byColumn: MicroPixVegaByColumn? = nil, byFields: MicroPixVegaByFields? = nil, byId: MicroPixVegaById? = nil, delete: MicroPixVegaDelete? = nil, paginate: MicroPixVegaPaginate? = nil, search: MicroPixVegaSearch? = nil, update: MicroPixVegaUpdate? = nil, upsert: MicroPixVegaUpsert? = nil, upsert1: MicroPixVegaUpsert1? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<MicroPixVegaServerRequest> {
         let localVariablePath = "/micro_pix_vega"
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         var localVariableParameters: [String: any Sendable] = [:]
@@ -95,6 +97,7 @@ open class MicroPixVegaRouteAPI {
         if let value = search { appendBracket(into: &localVariableParameters, baseName: "search", value: value) }
         if let value = update { appendBracket(into: &localVariableParameters, baseName: "update", value: value) }
         if let value = upsert { appendBracket(into: &localVariableParameters, baseName: "upsert", value: value) }
+        if let value = upsert1 { appendBracket(into: &localVariableParameters, baseName: "upsert1", value: value) }
         appendBracket(into: &localVariableParameters, baseName: "user_id", value: userId)
         
 

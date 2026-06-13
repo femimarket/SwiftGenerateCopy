@@ -9,7 +9,7 @@ Method | HTTP request | Description
 
 # **lyricSync**
 ```swift
-    open class func lyricSync(userId: String, byColumn: LyricSyncByColumn? = nil, byFields: LyricSyncByFields? = nil, byId: LyricSyncById? = nil, delete: LyricSyncDelete? = nil, paginate: LyricSyncPaginate? = nil, search: LyricSyncSearch? = nil, update: LyricSyncUpdate? = nil, upsert: LyricSyncUpsert? = nil, completion: @escaping (_ data: LyricSyncServerRequest?, _ error: Error?) -> Void)
+    open class func lyricSync(audio: String, id: UUID, lyrics: String, characters: [CharacterAlignment]? = nil, credit: Int64? = nil, loss: Double? = nil, userId: String? = nil, words: [WordAlignment]? = nil, completion: @escaping (_ data: LyricSync?, _ error: Error?) -> Void)
 ```
 
 
@@ -19,17 +19,16 @@ Method | HTTP request | Description
 // The following code samples are still beta. For any issue, please report via http://github.com/OpenAPITools/openapi-generator/issues/new
 import Api
 
-let userId = "userId_example" // String | 
-let byColumn = lyric_sync.ByColumn(column: "column_example", data: [LyricSync(audio: "audio_example", characters: [CharacterAlignment(end: 123, start: 123, text: "text_example")], credit: 123, id: 123, loss: 123, lyrics: "lyrics_example", userId: "userId_example", words: [WordAlignment(end: 123, loss: 123, start: 123, text: "text_example")])], value: 123) // LyricSyncByColumn |  (optional)
-let byFields = lyric_sync.ByFields(data: [LyricSync(audio: "audio_example", characters: [CharacterAlignment(end: 123, start: 123, text: "text_example")], credit: 123, id: 123, loss: 123, lyrics: "lyrics_example", userId: "userId_example", words: [WordAlignment(end: 123, loss: 123, start: 123, text: "text_example")])], fields: [lyric_sync.ByFieldsQuery(path: "path_example", value: "value_example")]) // LyricSyncByFields |  (optional)
-let byId = lyric_sync.ById(data: LyricSync(audio: "audio_example", characters: [CharacterAlignment(end: 123, start: 123, text: "text_example")], credit: 123, id: 123, loss: 123, lyrics: "lyrics_example", userId: "userId_example", words: [WordAlignment(end: 123, loss: 123, start: 123, text: "text_example")]), id: 123) // LyricSyncById |  (optional)
-let delete = lyric_sync.Delete(data: [123]) // LyricSyncDelete |  (optional)
-let paginate = lyric_sync.Paginate(data: [LyricSync(audio: "audio_example", characters: [CharacterAlignment(end: 123, start: 123, text: "text_example")], credit: 123, id: 123, loss: 123, lyrics: "lyrics_example", userId: "userId_example", words: [WordAlignment(end: 123, loss: 123, start: 123, text: "text_example")])], skip: 123, take: 123) // LyricSyncPaginate |  (optional)
-let search = lyric_sync.Search(data: [LyricSync(audio: "audio_example", characters: [CharacterAlignment(end: 123, start: 123, text: "text_example")], credit: 123, id: 123, loss: 123, lyrics: "lyrics_example", userId: "userId_example", words: [WordAlignment(end: 123, loss: 123, start: 123, text: "text_example")])], query: "query_example") // LyricSyncSearch |  (optional)
-let update = lyric_sync.Update(data: [LyricSync(audio: "audio_example", characters: [CharacterAlignment(end: 123, start: 123, text: "text_example")], credit: 123, id: 123, loss: 123, lyrics: "lyrics_example", userId: "userId_example", words: [WordAlignment(end: 123, loss: 123, start: 123, text: "text_example")])], inputs: [lyric_sync.UpdateItem(fields: "TODO", id: 123)]) // LyricSyncUpdate |  (optional)
-let upsert = lyric_sync.Upsert(data: [LyricSync(audio: "audio_example", characters: [CharacterAlignment(end: 123, start: 123, text: "text_example")], credit: 123, id: 123, loss: 123, lyrics: "lyrics_example", userId: "userId_example", words: [WordAlignment(end: 123, loss: 123, start: 123, text: "text_example")])]) // LyricSyncUpsert |  (optional)
+let audio = "audio_example" // String | 
+let id = 987 // UUID | 
+let lyrics = "lyrics_example" // String | 
+let characters = [CharacterAlignment(end: 123, start: 123, text: "text_example")] // [CharacterAlignment] |  (optional)
+let credit = 987 // Int64 |  (optional)
+let loss = 987 // Double |  (optional)
+let userId = "userId_example" // String |  (optional)
+let words = [WordAlignment(end: 123, loss: 123, start: 123, text: "text_example")] // [WordAlignment] |  (optional)
 
-LyricSyncRouteAPI.lyricSync(userId: userId, byColumn: byColumn, byFields: byFields, byId: byId, delete: delete, paginate: paginate, search: search, update: update, upsert: upsert) { (response, error) in
+LyricSyncRouteAPI.lyricSync(audio: audio, id: id, lyrics: lyrics, characters: characters, credit: credit, loss: loss, userId: userId, words: words) { (response, error) in
     guard error == nil else {
         print(error)
         return
@@ -45,19 +44,18 @@ LyricSyncRouteAPI.lyricSync(userId: userId, byColumn: byColumn, byFields: byFiel
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
- **userId** | **String** |  | 
- **byColumn** | [**LyricSyncByColumn**](LyricSyncByColumn.md) |  | [optional] 
- **byFields** | [**LyricSyncByFields**](LyricSyncByFields.md) |  | [optional] 
- **byId** | [**LyricSyncById**](LyricSyncById.md) |  | [optional] 
- **delete** | [**LyricSyncDelete**](LyricSyncDelete.md) |  | [optional] 
- **paginate** | [**LyricSyncPaginate**](LyricSyncPaginate.md) |  | [optional] 
- **search** | [**LyricSyncSearch**](LyricSyncSearch.md) |  | [optional] 
- **update** | [**LyricSyncUpdate**](LyricSyncUpdate.md) |  | [optional] 
- **upsert** | [**LyricSyncUpsert**](LyricSyncUpsert.md) |  | [optional] 
+ **audio** | **String** |  | 
+ **id** | **UUID** |  | 
+ **lyrics** | **String** |  | 
+ **characters** | [**[CharacterAlignment]**](CharacterAlignment.md) |  | [optional] 
+ **credit** | **Int64** |  | [optional] 
+ **loss** | **Double** |  | [optional] 
+ **userId** | **String** |  | [optional] 
+ **words** | [**[WordAlignment]**](WordAlignment.md) |  | [optional] 
 
 ### Return type
 
-[**LyricSyncServerRequest**](LyricSyncServerRequest.md)
+[**LyricSync**](LyricSync.md)
 
 ### Authorization
 

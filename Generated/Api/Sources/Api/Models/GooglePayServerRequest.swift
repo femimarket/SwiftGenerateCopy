@@ -17,9 +17,10 @@ public struct GooglePayServerRequest: Sendable, Codable, Hashable {
     public var search: GooglePaySearch?
     public var update: GooglePayUpdate?
     public var upsert: GooglePayUpsert?
+    public var upsert1: GooglePayUpsert1?
     public var userId: String
 
-    public init(byColumn: GooglePayByColumn? = nil, byFields: GooglePayByFields? = nil, byId: GooglePayById? = nil, delete: GooglePayDelete? = nil, paginate: GooglePayPaginate? = nil, search: GooglePaySearch? = nil, update: GooglePayUpdate? = nil, upsert: GooglePayUpsert? = nil, userId: String) {
+    public init(byColumn: GooglePayByColumn? = nil, byFields: GooglePayByFields? = nil, byId: GooglePayById? = nil, delete: GooglePayDelete? = nil, paginate: GooglePayPaginate? = nil, search: GooglePaySearch? = nil, update: GooglePayUpdate? = nil, upsert: GooglePayUpsert? = nil, upsert1: GooglePayUpsert1? = nil, userId: String) {
         self.byColumn = byColumn
         self.byFields = byFields
         self.byId = byId
@@ -28,6 +29,7 @@ public struct GooglePayServerRequest: Sendable, Codable, Hashable {
         self.search = search
         self.update = update
         self.upsert = upsert
+        self.upsert1 = upsert1
         self.userId = userId
     }
 
@@ -40,6 +42,7 @@ public struct GooglePayServerRequest: Sendable, Codable, Hashable {
         case search
         case update
         case upsert
+        case upsert1
         case userId = "user_id"
     }
 
@@ -55,6 +58,7 @@ public struct GooglePayServerRequest: Sendable, Codable, Hashable {
         try container.encodeIfPresent(search, forKey: .search)
         try container.encodeIfPresent(update, forKey: .update)
         try container.encodeIfPresent(upsert, forKey: .upsert)
+        try container.encodeIfPresent(upsert1, forKey: .upsert1)
         try container.encode(userId, forKey: .userId)
     }
 }

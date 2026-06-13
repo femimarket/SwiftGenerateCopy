@@ -59,11 +59,12 @@ open class MicroPixLyraRouteAPI {
      - parameter search: (form)  (optional)
      - parameter update: (form)  (optional)
      - parameter upsert: (form)  (optional)
+     - parameter upsert1: (form)  (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: MicroPixLyraServerRequest
      */
-    open class func microPixLyra(userId: String, byColumn: MicroPixLyraByColumn? = nil, byFields: MicroPixLyraByFields? = nil, byId: MicroPixLyraById? = nil, delete: MicroPixLyraDelete? = nil, paginate: MicroPixLyraPaginate? = nil, search: MicroPixLyraSearch? = nil, update: MicroPixLyraUpdate? = nil, upsert: MicroPixLyraUpsert? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> MicroPixLyraServerRequest {
-        return try await microPixLyraWithRequestBuilder(userId: userId, byColumn: byColumn, byFields: byFields, byId: byId, delete: delete, paginate: paginate, search: search, update: update, upsert: upsert, apiConfiguration: apiConfiguration).execute().body
+    open class func microPixLyra(userId: String, byColumn: MicroPixLyraByColumn? = nil, byFields: MicroPixLyraByFields? = nil, byId: MicroPixLyraById? = nil, delete: MicroPixLyraDelete? = nil, paginate: MicroPixLyraPaginate? = nil, search: MicroPixLyraSearch? = nil, update: MicroPixLyraUpdate? = nil, upsert: MicroPixLyraUpsert? = nil, upsert1: MicroPixLyraUpsert1? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> MicroPixLyraServerRequest {
+        return try await microPixLyraWithRequestBuilder(userId: userId, byColumn: byColumn, byFields: byFields, byId: byId, delete: delete, paginate: paginate, search: search, update: update, upsert: upsert, upsert1: upsert1, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -80,10 +81,11 @@ open class MicroPixLyraRouteAPI {
      - parameter search: (form)  (optional)
      - parameter update: (form)  (optional)
      - parameter upsert: (form)  (optional)
+     - parameter upsert1: (form)  (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<MicroPixLyraServerRequest> 
      */
-    open class func microPixLyraWithRequestBuilder(userId: String, byColumn: MicroPixLyraByColumn? = nil, byFields: MicroPixLyraByFields? = nil, byId: MicroPixLyraById? = nil, delete: MicroPixLyraDelete? = nil, paginate: MicroPixLyraPaginate? = nil, search: MicroPixLyraSearch? = nil, update: MicroPixLyraUpdate? = nil, upsert: MicroPixLyraUpsert? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<MicroPixLyraServerRequest> {
+    open class func microPixLyraWithRequestBuilder(userId: String, byColumn: MicroPixLyraByColumn? = nil, byFields: MicroPixLyraByFields? = nil, byId: MicroPixLyraById? = nil, delete: MicroPixLyraDelete? = nil, paginate: MicroPixLyraPaginate? = nil, search: MicroPixLyraSearch? = nil, update: MicroPixLyraUpdate? = nil, upsert: MicroPixLyraUpsert? = nil, upsert1: MicroPixLyraUpsert1? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<MicroPixLyraServerRequest> {
         let localVariablePath = "/micro_pix_lyra"
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         var localVariableParameters: [String: any Sendable] = [:]
@@ -95,6 +97,7 @@ open class MicroPixLyraRouteAPI {
         if let value = search { appendBracket(into: &localVariableParameters, baseName: "search", value: value) }
         if let value = update { appendBracket(into: &localVariableParameters, baseName: "update", value: value) }
         if let value = upsert { appendBracket(into: &localVariableParameters, baseName: "upsert", value: value) }
+        if let value = upsert1 { appendBracket(into: &localVariableParameters, baseName: "upsert1", value: value) }
         appendBracket(into: &localVariableParameters, baseName: "user_id", value: userId)
         
 

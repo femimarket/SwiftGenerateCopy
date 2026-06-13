@@ -11,6 +11,7 @@ Name | Type | Description | Notes
 **search** | [**SummarySearch**](SummarySearch.md) |  | [optional] 
 **update** | [**SummaryUpdate**](SummaryUpdate.md) |  | [optional] 
 **upsert** | [**SummaryUpsert**](SummaryUpsert.md) |  | [optional] 
+**upsert1** | [**SummaryUpsert1**](SummaryUpsert1.md) |  | [optional] 
 **userId** | **String** |  | 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

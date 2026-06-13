@@ -11,6 +11,7 @@ Name | Type | Description | Notes
 **search** | [**ApplePaySearch**](ApplePaySearch.md) |  | [optional] 
 **update** | [**ApplePayUpdate**](ApplePayUpdate.md) |  | [optional] 
 **upsert** | [**ApplePayUpsert**](ApplePayUpsert.md) |  | [optional] 
+**upsert1** | [**ApplePayUpsert1**](ApplePayUpsert1.md) |  | [optional] 
 **userId** | **String** |  | 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

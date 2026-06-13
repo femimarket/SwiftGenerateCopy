@@ -17,9 +17,10 @@ public struct NanoPixLunaServerRequest: Sendable, Codable, Hashable {
     public var search: NanoPixLunaSearch?
     public var update: NanoPixLunaUpdate?
     public var upsert: NanoPixLunaUpsert?
+    public var upsert1: NanoPixLunaUpsert1?
     public var userId: String
 
-    public init(byColumn: NanoPixLunaByColumn? = nil, byFields: NanoPixLunaByFields? = nil, byId: NanoPixLunaById? = nil, delete: NanoPixLunaDelete? = nil, paginate: NanoPixLunaPaginate? = nil, search: NanoPixLunaSearch? = nil, update: NanoPixLunaUpdate? = nil, upsert: NanoPixLunaUpsert? = nil, userId: String) {
+    public init(byColumn: NanoPixLunaByColumn? = nil, byFields: NanoPixLunaByFields? = nil, byId: NanoPixLunaById? = nil, delete: NanoPixLunaDelete? = nil, paginate: NanoPixLunaPaginate? = nil, search: NanoPixLunaSearch? = nil, update: NanoPixLunaUpdate? = nil, upsert: NanoPixLunaUpsert? = nil, upsert1: NanoPixLunaUpsert1? = nil, userId: String) {
         self.byColumn = byColumn
         self.byFields = byFields
         self.byId = byId
@@ -28,6 +29,7 @@ public struct NanoPixLunaServerRequest: Sendable, Codable, Hashable {
         self.search = search
         self.update = update
         self.upsert = upsert
+        self.upsert1 = upsert1
         self.userId = userId
     }
 
@@ -40,6 +42,7 @@ public struct NanoPixLunaServerRequest: Sendable, Codable, Hashable {
         case search
         case update
         case upsert
+        case upsert1
         case userId = "user_id"
     }
 
@@ -55,6 +58,7 @@ public struct NanoPixLunaServerRequest: Sendable, Codable, Hashable {
         try container.encodeIfPresent(search, forKey: .search)
         try container.encodeIfPresent(update, forKey: .update)
         try container.encodeIfPresent(upsert, forKey: .upsert)
+        try container.encodeIfPresent(upsert1, forKey: .upsert1)
         try container.encode(userId, forKey: .userId)
     }
 }

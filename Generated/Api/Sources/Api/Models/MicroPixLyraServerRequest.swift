@@ -17,9 +17,10 @@ public struct MicroPixLyraServerRequest: Sendable, Codable, Hashable {
     public var search: MicroPixLyraSearch?
     public var update: MicroPixLyraUpdate?
     public var upsert: MicroPixLyraUpsert?
+    public var upsert1: MicroPixLyraUpsert1?
     public var userId: String
 
-    public init(byColumn: MicroPixLyraByColumn? = nil, byFields: MicroPixLyraByFields? = nil, byId: MicroPixLyraById? = nil, delete: MicroPixLyraDelete? = nil, paginate: MicroPixLyraPaginate? = nil, search: MicroPixLyraSearch? = nil, update: MicroPixLyraUpdate? = nil, upsert: MicroPixLyraUpsert? = nil, userId: String) {
+    public init(byColumn: MicroPixLyraByColumn? = nil, byFields: MicroPixLyraByFields? = nil, byId: MicroPixLyraById? = nil, delete: MicroPixLyraDelete? = nil, paginate: MicroPixLyraPaginate? = nil, search: MicroPixLyraSearch? = nil, update: MicroPixLyraUpdate? = nil, upsert: MicroPixLyraUpsert? = nil, upsert1: MicroPixLyraUpsert1? = nil, userId: String) {
         self.byColumn = byColumn
         self.byFields = byFields
         self.byId = byId
@@ -28,6 +29,7 @@ public struct MicroPixLyraServerRequest: Sendable, Codable, Hashable {
         self.search = search
         self.update = update
         self.upsert = upsert
+        self.upsert1 = upsert1
         self.userId = userId
     }
 
@@ -40,6 +42,7 @@ public struct MicroPixLyraServerRequest: Sendable, Codable, Hashable {
         case search
         case update
         case upsert
+        case upsert1
         case userId = "user_id"
     }
 
@@ -55,6 +58,7 @@ public struct MicroPixLyraServerRequest: Sendable, Codable, Hashable {
         try container.encodeIfPresent(search, forKey: .search)
         try container.encodeIfPresent(update, forKey: .update)
         try container.encodeIfPresent(upsert, forKey: .upsert)
+        try container.encodeIfPresent(upsert1, forKey: .upsert1)
         try container.encode(userId, forKey: .userId)
     }
 }

@@ -11,6 +11,7 @@ Name | Type | Description | Notes
 **search** | [**LyricSyncSearch**](LyricSyncSearch.md) |  | [optional] 
 **update** | [**LyricSyncUpdate**](LyricSyncUpdate.md) |  | [optional] 
 **upsert** | [**LyricSyncUpsert**](LyricSyncUpsert.md) |  | [optional] 
+**upsert1** | [**LyricSyncUpsert1**](LyricSyncUpsert1.md) |  | [optional] 
 **userId** | **String** |  | 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

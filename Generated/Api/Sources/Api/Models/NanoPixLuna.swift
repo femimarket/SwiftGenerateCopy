@@ -7,17 +7,19 @@
 
 import Foundation
 
+/** use default values */
 public struct NanoPixLuna: Sendable, Codable, Hashable {
 
-    public var credit: Int64?
-    public var file: String?
+    public var credit: Int64
+    public var file: String
+    /** uuid v7 */
     public var id: UUID
     public var prompt: String
-    public var requestId: String?
-    public var status: Status
+    public var requestId: String
+    public var status: NanoPixLunaStatus
     public var userId: String
 
-    public init(credit: Int64? = nil, file: String? = nil, id: UUID, prompt: String, requestId: String? = nil, status: Status, userId: String) {
+    public init(credit: Int64, file: String, id: UUID, prompt: String, requestId: String, status: NanoPixLunaStatus, userId: String) {
         self.credit = credit
         self.file = file
         self.id = id
@@ -41,11 +43,11 @@ public struct NanoPixLuna: Sendable, Codable, Hashable {
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeIfPresent(credit, forKey: .credit)
-        try container.encodeIfPresent(file, forKey: .file)
+        try container.encode(credit, forKey: .credit)
+        try container.encode(file, forKey: .file)
         try container.encode(id, forKey: .id)
         try container.encode(prompt, forKey: .prompt)
-        try container.encodeIfPresent(requestId, forKey: .requestId)
+        try container.encode(requestId, forKey: .requestId)
         try container.encode(status, forKey: .status)
         try container.encode(userId, forKey: .userId)
     }

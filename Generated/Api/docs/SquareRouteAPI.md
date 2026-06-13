@@ -9,7 +9,7 @@ Method | HTTP request | Description
 
 # **square**
 ```swift
-    open class func square(userId: String, byColumn: SquareByColumn? = nil, byFields: SquareByFields? = nil, byId: SquareById? = nil, delete: SquareDelete? = nil, paginate: SquarePaginate? = nil, search: SquareSearch? = nil, update: SquareUpdate? = nil, upsert: SquareUpsert? = nil, completion: @escaping (_ data: SquareServerRequest?, _ error: Error?) -> Void)
+    open class func square(amountCents: Int64, id: UUID, status: Status, userId: String, credit: Int64? = nil, loaded: Bool? = nil, paymentUrl: String? = nil, squareOrderId: String? = nil, squarePaymentId: String? = nil, completion: @escaping (_ data: Square?, _ error: Error?) -> Void)
 ```
 
 
@@ -19,17 +19,17 @@ Method | HTTP request | Description
 // The following code samples are still beta. For any issue, please report via http://github.com/OpenAPITools/openapi-generator/issues/new
 import Api
 
+let amountCents = 987 // Int64 | 
+let id = 987 // UUID | 
+let status = Status() // Status | 
 let userId = "userId_example" // String | 
-let byColumn = square.ByColumn(column: "column_example", data: [Square(amountCents: 123, credit: 123, id: 123, loaded: false, paymentUrl: "paymentUrl_example", squareOrderId: "squareOrderId_example", squarePaymentId: "squarePaymentId_example", status: Status(), userId: "userId_example")], value: 123) // SquareByColumn |  (optional)
-let byFields = square.ByFields(data: [Square(amountCents: 123, credit: 123, id: 123, loaded: false, paymentUrl: "paymentUrl_example", squareOrderId: "squareOrderId_example", squarePaymentId: "squarePaymentId_example", status: Status(), userId: "userId_example")], fields: [square.ByFieldsQuery(path: "path_example", value: "value_example")]) // SquareByFields |  (optional)
-let byId = square.ById(data: Square(amountCents: 123, credit: 123, id: 123, loaded: false, paymentUrl: "paymentUrl_example", squareOrderId: "squareOrderId_example", squarePaymentId: "squarePaymentId_example", status: Status(), userId: "userId_example"), id: 123) // SquareById |  (optional)
-let delete = square.Delete(data: [123]) // SquareDelete |  (optional)
-let paginate = square.Paginate(data: [Square(amountCents: 123, credit: 123, id: 123, loaded: false, paymentUrl: "paymentUrl_example", squareOrderId: "squareOrderId_example", squarePaymentId: "squarePaymentId_example", status: Status(), userId: "userId_example")], skip: 123, take: 123) // SquarePaginate |  (optional)
-let search = square.Search(data: [Square(amountCents: 123, credit: 123, id: 123, loaded: false, paymentUrl: "paymentUrl_example", squareOrderId: "squareOrderId_example", squarePaymentId: "squarePaymentId_example", status: Status(), userId: "userId_example")], query: "query_example") // SquareSearch |  (optional)
-let update = square.Update(data: [Square(amountCents: 123, credit: 123, id: 123, loaded: false, paymentUrl: "paymentUrl_example", squareOrderId: "squareOrderId_example", squarePaymentId: "squarePaymentId_example", status: Status(), userId: "userId_example")], inputs: [square.UpdateItem(fields: "TODO", id: 123)]) // SquareUpdate |  (optional)
-let upsert = square.Upsert(data: [Square(amountCents: 123, credit: 123, id: 123, loaded: false, paymentUrl: "paymentUrl_example", squareOrderId: "squareOrderId_example", squarePaymentId: "squarePaymentId_example", status: Status(), userId: "userId_example")]) // SquareUpsert |  (optional)
+let credit = 987 // Int64 |  (optional)
+let loaded = true // Bool |  (optional)
+let paymentUrl = "paymentUrl_example" // String |  (optional)
+let squareOrderId = "squareOrderId_example" // String |  (optional)
+let squarePaymentId = "squarePaymentId_example" // String |  (optional)
 
-SquareRouteAPI.square(userId: userId, byColumn: byColumn, byFields: byFields, byId: byId, delete: delete, paginate: paginate, search: search, update: update, upsert: upsert) { (response, error) in
+SquareRouteAPI.square(amountCents: amountCents, id: id, status: status, userId: userId, credit: credit, loaded: loaded, paymentUrl: paymentUrl, squareOrderId: squareOrderId, squarePaymentId: squarePaymentId) { (response, error) in
     guard error == nil else {
         print(error)
         return
@@ -45,19 +45,19 @@ SquareRouteAPI.square(userId: userId, byColumn: byColumn, byFields: byFields, by
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
+ **amountCents** | **Int64** |  | 
+ **id** | **UUID** |  | 
+ **status** | [**Status**](Status.md) |  | 
  **userId** | **String** |  | 
- **byColumn** | [**SquareByColumn**](SquareByColumn.md) |  | [optional] 
- **byFields** | [**SquareByFields**](SquareByFields.md) |  | [optional] 
- **byId** | [**SquareById**](SquareById.md) |  | [optional] 
- **delete** | [**SquareDelete**](SquareDelete.md) |  | [optional] 
- **paginate** | [**SquarePaginate**](SquarePaginate.md) |  | [optional] 
- **search** | [**SquareSearch**](SquareSearch.md) |  | [optional] 
- **update** | [**SquareUpdate**](SquareUpdate.md) |  | [optional] 
- **upsert** | [**SquareUpsert**](SquareUpsert.md) |  | [optional] 
+ **credit** | **Int64** |  | [optional] 
+ **loaded** | **Bool** |  | [optional] 
+ **paymentUrl** | **String** |  | [optional] 
+ **squareOrderId** | **String** |  | [optional] 
+ **squarePaymentId** | **String** |  | [optional] 
 
 ### Return type
 
-[**SquareServerRequest**](SquareServerRequest.md)
+[**Square**](Square.md)
 
 ### Authorization
 

@@ -14,24 +14,33 @@ public struct Pricing: Sendable, Codable, Hashable {
     public var chat: Int64
     public var creator: Int64
     public var director: Int64
+    public var falFlux2Pro: Int64
+    public var falNanoBanana2: Int64
+    public var falZImageTurbo: Int64
     public var gb: Int64
+    public var generate: Int64
     public var id: UUID
     public var image: Int64
-    public var lyricSync: Int64?
+    public var lyricSync: Int64
     public var microPixLyra: Int64
     public var microPixVega: Int64
     public var nanoPixLuna: Int64
     public var nanoRenSpica: Int64
     public var question: Int64
     public var summary: Int64
+    public var upload: Int64
 
-    public init(artist: Int64, audio: Int64, chat: Int64, creator: Int64, director: Int64, gb: Int64, id: UUID, image: Int64, lyricSync: Int64? = nil, microPixLyra: Int64, microPixVega: Int64, nanoPixLuna: Int64, nanoRenSpica: Int64, question: Int64, summary: Int64) {
+    public init(artist: Int64, audio: Int64, chat: Int64, creator: Int64, director: Int64, falFlux2Pro: Int64, falNanoBanana2: Int64, falZImageTurbo: Int64, gb: Int64, generate: Int64, id: UUID, image: Int64, lyricSync: Int64, microPixLyra: Int64, microPixVega: Int64, nanoPixLuna: Int64, nanoRenSpica: Int64, question: Int64, summary: Int64, upload: Int64) {
         self.artist = artist
         self.audio = audio
         self.chat = chat
         self.creator = creator
         self.director = director
+        self.falFlux2Pro = falFlux2Pro
+        self.falNanoBanana2 = falNanoBanana2
+        self.falZImageTurbo = falZImageTurbo
         self.gb = gb
+        self.generate = generate
         self.id = id
         self.image = image
         self.lyricSync = lyricSync
@@ -41,6 +50,7 @@ public struct Pricing: Sendable, Codable, Hashable {
         self.nanoRenSpica = nanoRenSpica
         self.question = question
         self.summary = summary
+        self.upload = upload
     }
 
     public enum CodingKeys: String, CodingKey, CaseIterable {
@@ -49,7 +59,11 @@ public struct Pricing: Sendable, Codable, Hashable {
         case chat
         case creator
         case director
+        case falFlux2Pro = "fal_flux2_pro"
+        case falNanoBanana2 = "fal_nano_banana2"
+        case falZImageTurbo = "fal_z_image_turbo"
         case gb
+        case generate
         case id
         case image
         case lyricSync = "lyric_sync"
@@ -59,6 +73,7 @@ public struct Pricing: Sendable, Codable, Hashable {
         case nanoRenSpica = "nano_ren_spica"
         case question
         case summary
+        case upload
     }
 
     // Encodable protocol methods
@@ -70,16 +85,21 @@ public struct Pricing: Sendable, Codable, Hashable {
         try container.encode(chat, forKey: .chat)
         try container.encode(creator, forKey: .creator)
         try container.encode(director, forKey: .director)
+        try container.encode(falFlux2Pro, forKey: .falFlux2Pro)
+        try container.encode(falNanoBanana2, forKey: .falNanoBanana2)
+        try container.encode(falZImageTurbo, forKey: .falZImageTurbo)
         try container.encode(gb, forKey: .gb)
+        try container.encode(generate, forKey: .generate)
         try container.encode(id, forKey: .id)
         try container.encode(image, forKey: .image)
-        try container.encodeIfPresent(lyricSync, forKey: .lyricSync)
+        try container.encode(lyricSync, forKey: .lyricSync)
         try container.encode(microPixLyra, forKey: .microPixLyra)
         try container.encode(microPixVega, forKey: .microPixVega)
         try container.encode(nanoPixLuna, forKey: .nanoPixLuna)
         try container.encode(nanoRenSpica, forKey: .nanoRenSpica)
         try container.encode(question, forKey: .question)
         try container.encode(summary, forKey: .summary)
+        try container.encode(upload, forKey: .upload)
     }
 }
 

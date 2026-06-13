@@ -11,6 +11,7 @@ Name | Type | Description | Notes
 **search** | [**NanoRenSpicaSearch**](NanoRenSpicaSearch.md) |  | [optional] 
 **update** | [**NanoRenSpicaUpdate**](NanoRenSpicaUpdate.md) |  | [optional] 
 **upsert** | [**NanoRenSpicaUpsert**](NanoRenSpicaUpsert.md) |  | [optional] 
+**upsert1** | [**NanoRenSpicaUpsert1**](NanoRenSpicaUpsert1.md) |  | [optional] 
 **userId** | **String** |  | 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

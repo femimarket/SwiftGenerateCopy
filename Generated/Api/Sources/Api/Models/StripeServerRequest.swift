@@ -17,9 +17,10 @@ public struct StripeServerRequest: Sendable, Codable, Hashable {
     public var search: StripeSearch?
     public var update: StripeUpdate?
     public var upsert: StripeUpsert?
+    public var upsert1: StripeUpsert1?
     public var userId: String
 
-    public init(byColumn: StripeByColumn? = nil, byFields: StripeByFields? = nil, byId: StripeById? = nil, delete: StripeDelete? = nil, paginate: StripePaginate? = nil, search: StripeSearch? = nil, update: StripeUpdate? = nil, upsert: StripeUpsert? = nil, userId: String) {
+    public init(byColumn: StripeByColumn? = nil, byFields: StripeByFields? = nil, byId: StripeById? = nil, delete: StripeDelete? = nil, paginate: StripePaginate? = nil, search: StripeSearch? = nil, update: StripeUpdate? = nil, upsert: StripeUpsert? = nil, upsert1: StripeUpsert1? = nil, userId: String) {
         self.byColumn = byColumn
         self.byFields = byFields
         self.byId = byId
@@ -28,6 +29,7 @@ public struct StripeServerRequest: Sendable, Codable, Hashable {
         self.search = search
         self.update = update
         self.upsert = upsert
+        self.upsert1 = upsert1
         self.userId = userId
     }
 
@@ -40,6 +42,7 @@ public struct StripeServerRequest: Sendable, Codable, Hashable {
         case search
         case update
         case upsert
+        case upsert1
         case userId = "user_id"
     }
 
@@ -55,6 +58,7 @@ public struct StripeServerRequest: Sendable, Codable, Hashable {
         try container.encodeIfPresent(search, forKey: .search)
         try container.encodeIfPresent(update, forKey: .update)
         try container.encodeIfPresent(upsert, forKey: .upsert)
+        try container.encodeIfPresent(upsert1, forKey: .upsert1)
         try container.encode(userId, forKey: .userId)
     }
 }

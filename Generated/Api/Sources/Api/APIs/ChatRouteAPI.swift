@@ -50,20 +50,15 @@ open class ChatRouteAPI {
 
     /**
 
-     - parameter userId: (form)  
-     - parameter byColumn: (form)  (optional)
-     - parameter byFields: (form)  (optional)
-     - parameter byId: (form)  (optional)
-     - parameter delete: (form)  (optional)
-     - parameter paginate: (form)  (optional)
-     - parameter search: (form)  (optional)
-     - parameter update: (form)  (optional)
-     - parameter upsert: (form)  (optional)
+     - parameter id: (form)  
+     - parameter messages: (form)  
+     - parameter credit: (form)  (optional)
+     - parameter userId: (form)  (optional)
      - parameter apiConfiguration: The configuration for the http request.
-     - returns: ChatServerRequest
+     - returns: Chat
      */
-    open class func chat(userId: String, byColumn: ChatByColumn? = nil, byFields: ChatByFields? = nil, byId: ChatById? = nil, delete: ChatDelete? = nil, paginate: ChatPaginate? = nil, search: ChatSearch? = nil, update: ChatUpdate? = nil, upsert: ChatUpsert? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> ChatServerRequest {
-        return try await chatWithRequestBuilder(userId: userId, byColumn: byColumn, byFields: byFields, byId: byId, delete: delete, paginate: paginate, search: search, update: update, upsert: upsert, apiConfiguration: apiConfiguration).execute().body
+    open class func chat(id: UUID, messages: [ChatMessage], credit: Int64? = nil, userId: String? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> Chat {
+        return try await chatWithRequestBuilder(id: id, messages: messages, credit: credit, userId: userId, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -71,31 +66,21 @@ open class ChatRouteAPI {
      - Bearer Token:
        - type: http
        - name: bearer
-     - parameter userId: (form)  
-     - parameter byColumn: (form)  (optional)
-     - parameter byFields: (form)  (optional)
-     - parameter byId: (form)  (optional)
-     - parameter delete: (form)  (optional)
-     - parameter paginate: (form)  (optional)
-     - parameter search: (form)  (optional)
-     - parameter update: (form)  (optional)
-     - parameter upsert: (form)  (optional)
+     - parameter id: (form)  
+     - parameter messages: (form)  
+     - parameter credit: (form)  (optional)
+     - parameter userId: (form)  (optional)
      - parameter apiConfiguration: The configuration for the http request.
-     - returns: RequestBuilder<ChatServerRequest> 
+     - returns: RequestBuilder<Chat> 
      */
-    open class func chatWithRequestBuilder(userId: String, byColumn: ChatByColumn? = nil, byFields: ChatByFields? = nil, byId: ChatById? = nil, delete: ChatDelete? = nil, paginate: ChatPaginate? = nil, search: ChatSearch? = nil, update: ChatUpdate? = nil, upsert: ChatUpsert? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<ChatServerRequest> {
+    open class func chatWithRequestBuilder(id: UUID, messages: [ChatMessage], credit: Int64? = nil, userId: String? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<Chat> {
         let localVariablePath = "/chat"
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         var localVariableParameters: [String: any Sendable] = [:]
-        if let value = byColumn { appendBracket(into: &localVariableParameters, baseName: "by_column", value: value) }
-        if let value = byFields { appendBracket(into: &localVariableParameters, baseName: "by_fields", value: value) }
-        if let value = byId { appendBracket(into: &localVariableParameters, baseName: "by_id", value: value) }
-        if let value = delete { appendBracket(into: &localVariableParameters, baseName: "delete", value: value) }
-        if let value = paginate { appendBracket(into: &localVariableParameters, baseName: "paginate", value: value) }
-        if let value = search { appendBracket(into: &localVariableParameters, baseName: "search", value: value) }
-        if let value = update { appendBracket(into: &localVariableParameters, baseName: "update", value: value) }
-        if let value = upsert { appendBracket(into: &localVariableParameters, baseName: "upsert", value: value) }
-        appendBracket(into: &localVariableParameters, baseName: "user_id", value: userId)
+        if let value = credit { appendBracket(into: &localVariableParameters, baseName: "credit", value: value) }
+        appendBracket(into: &localVariableParameters, baseName: "id", value: id)
+        appendBracket(into: &localVariableParameters, baseName: "messages", value: messages)
+        if let value = userId { appendBracket(into: &localVariableParameters, baseName: "user_id", value: value) }
         
 
         let localVariableUrlComponents = URLComponents(string: localVariableURLString)
@@ -106,7 +91,7 @@ open class ChatRouteAPI {
 
         let localVariableHeaderParameters = APIHelper.rejectNilHeaders(localVariableNillableHeaders)
 
-        let localVariableRequestBuilder: RequestBuilder<ChatServerRequest>.Type = apiConfiguration.requestBuilderFactory.getBuilder()
+        let localVariableRequestBuilder: RequestBuilder<Chat>.Type = apiConfiguration.requestBuilderFactory.getBuilder()
 
         return localVariableRequestBuilder.init(method: "POST", URLString: (localVariableUrlComponents?.string ?? localVariableURLString), parameters: localVariableParameters, headers: localVariableHeaderParameters, requiresAuthentication: true, apiConfiguration: apiConfiguration)
     }

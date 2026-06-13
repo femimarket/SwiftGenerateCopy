@@ -50,20 +50,20 @@ open class StripeRouteAPI {
 
     /**
 
+     - parameter amountCents: (form)  
+     - parameter id: (form)  
+     - parameter status: (form)  
      - parameter userId: (form)  
-     - parameter byColumn: (form)  (optional)
-     - parameter byFields: (form)  (optional)
-     - parameter byId: (form)  (optional)
-     - parameter delete: (form)  (optional)
-     - parameter paginate: (form)  (optional)
-     - parameter search: (form)  (optional)
-     - parameter update: (form)  (optional)
-     - parameter upsert: (form)  (optional)
+     - parameter credit: (form)  (optional)
+     - parameter loaded: (form)  (optional)
+     - parameter paymentUrl: (form)  (optional)
+     - parameter stripePaymentIntentId: (form)  (optional)
+     - parameter stripeSessionId: (form)  (optional)
      - parameter apiConfiguration: The configuration for the http request.
-     - returns: StripeServerRequest
+     - returns: Model
      */
-    open class func stripe(userId: String, byColumn: StripeByColumn? = nil, byFields: StripeByFields? = nil, byId: StripeById? = nil, delete: StripeDelete? = nil, paginate: StripePaginate? = nil, search: StripeSearch? = nil, update: StripeUpdate? = nil, upsert: StripeUpsert? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> StripeServerRequest {
-        return try await stripeWithRequestBuilder(userId: userId, byColumn: byColumn, byFields: byFields, byId: byId, delete: delete, paginate: paginate, search: search, update: update, upsert: upsert, apiConfiguration: apiConfiguration).execute().body
+    open class func stripe(amountCents: Int64, id: UUID, status: Status, userId: String, credit: Int64? = nil, loaded: Bool? = nil, paymentUrl: String? = nil, stripePaymentIntentId: String? = nil, stripeSessionId: String? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> Model {
+        return try await stripeWithRequestBuilder(amountCents: amountCents, id: id, status: status, userId: userId, credit: credit, loaded: loaded, paymentUrl: paymentUrl, stripePaymentIntentId: stripePaymentIntentId, stripeSessionId: stripeSessionId, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -71,30 +71,30 @@ open class StripeRouteAPI {
      - Bearer Token:
        - type: http
        - name: bearer
+     - parameter amountCents: (form)  
+     - parameter id: (form)  
+     - parameter status: (form)  
      - parameter userId: (form)  
-     - parameter byColumn: (form)  (optional)
-     - parameter byFields: (form)  (optional)
-     - parameter byId: (form)  (optional)
-     - parameter delete: (form)  (optional)
-     - parameter paginate: (form)  (optional)
-     - parameter search: (form)  (optional)
-     - parameter update: (form)  (optional)
-     - parameter upsert: (form)  (optional)
+     - parameter credit: (form)  (optional)
+     - parameter loaded: (form)  (optional)
+     - parameter paymentUrl: (form)  (optional)
+     - parameter stripePaymentIntentId: (form)  (optional)
+     - parameter stripeSessionId: (form)  (optional)
      - parameter apiConfiguration: The configuration for the http request.
-     - returns: RequestBuilder<StripeServerRequest> 
+     - returns: RequestBuilder<Model> 
      */
-    open class func stripeWithRequestBuilder(userId: String, byColumn: StripeByColumn? = nil, byFields: StripeByFields? = nil, byId: StripeById? = nil, delete: StripeDelete? = nil, paginate: StripePaginate? = nil, search: StripeSearch? = nil, update: StripeUpdate? = nil, upsert: StripeUpsert? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<StripeServerRequest> {
+    open class func stripeWithRequestBuilder(amountCents: Int64, id: UUID, status: Status, userId: String, credit: Int64? = nil, loaded: Bool? = nil, paymentUrl: String? = nil, stripePaymentIntentId: String? = nil, stripeSessionId: String? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<Model> {
         let localVariablePath = "/stripe"
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         var localVariableParameters: [String: any Sendable] = [:]
-        if let value = byColumn { appendBracket(into: &localVariableParameters, baseName: "by_column", value: value) }
-        if let value = byFields { appendBracket(into: &localVariableParameters, baseName: "by_fields", value: value) }
-        if let value = byId { appendBracket(into: &localVariableParameters, baseName: "by_id", value: value) }
-        if let value = delete { appendBracket(into: &localVariableParameters, baseName: "delete", value: value) }
-        if let value = paginate { appendBracket(into: &localVariableParameters, baseName: "paginate", value: value) }
-        if let value = search { appendBracket(into: &localVariableParameters, baseName: "search", value: value) }
-        if let value = update { appendBracket(into: &localVariableParameters, baseName: "update", value: value) }
-        if let value = upsert { appendBracket(into: &localVariableParameters, baseName: "upsert", value: value) }
+        appendBracket(into: &localVariableParameters, baseName: "amount_cents", value: amountCents)
+        if let value = credit { appendBracket(into: &localVariableParameters, baseName: "credit", value: value) }
+        appendBracket(into: &localVariableParameters, baseName: "id", value: id)
+        if let value = loaded { appendBracket(into: &localVariableParameters, baseName: "loaded", value: value) }
+        if let value = paymentUrl { appendBracket(into: &localVariableParameters, baseName: "payment_url", value: value) }
+        appendBracket(into: &localVariableParameters, baseName: "status", value: status)
+        if let value = stripePaymentIntentId { appendBracket(into: &localVariableParameters, baseName: "stripe_payment_intent_id", value: value) }
+        if let value = stripeSessionId { appendBracket(into: &localVariableParameters, baseName: "stripe_session_id", value: value) }
         appendBracket(into: &localVariableParameters, baseName: "user_id", value: userId)
         
 
@@ -106,7 +106,7 @@ open class StripeRouteAPI {
 
         let localVariableHeaderParameters = APIHelper.rejectNilHeaders(localVariableNillableHeaders)
 
-        let localVariableRequestBuilder: RequestBuilder<StripeServerRequest>.Type = apiConfiguration.requestBuilderFactory.getBuilder()
+        let localVariableRequestBuilder: RequestBuilder<Model>.Type = apiConfiguration.requestBuilderFactory.getBuilder()
 
         return localVariableRequestBuilder.init(method: "POST", URLString: (localVariableUrlComponents?.string ?? localVariableURLString), parameters: localVariableParameters, headers: localVariableHeaderParameters, requiresAuthentication: true, apiConfiguration: apiConfiguration)
     }

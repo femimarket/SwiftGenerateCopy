@@ -50,20 +50,15 @@ open class AudioRouteAPI {
 
     /**
 
-     - parameter userId: (form)  
-     - parameter byColumn: (form)  (optional)
-     - parameter byFields: (form)  (optional)
-     - parameter byId: (form)  (optional)
-     - parameter delete: (form)  (optional)
-     - parameter paginate: (form)  (optional)
-     - parameter search: (form)  (optional)
-     - parameter update: (form)  (optional)
-     - parameter upsert: (form)  (optional)
+     - parameter file: (form)  
+     - parameter id: (form)  
+     - parameter credit: (form)  (optional)
+     - parameter userId: (form)  (optional)
      - parameter apiConfiguration: The configuration for the http request.
-     - returns: AudioServerRequest
+     - returns: Audio
      */
-    open class func audio(userId: String, byColumn: AudioByColumn? = nil, byFields: AudioByFields? = nil, byId: AudioById? = nil, delete: AudioDelete? = nil, paginate: AudioPaginate? = nil, search: AudioSearch? = nil, update: AudioUpdate? = nil, upsert: AudioUpsert? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> AudioServerRequest {
-        return try await audioWithRequestBuilder(userId: userId, byColumn: byColumn, byFields: byFields, byId: byId, delete: delete, paginate: paginate, search: search, update: update, upsert: upsert, apiConfiguration: apiConfiguration).execute().body
+    open class func audio(file: String, id: UUID, credit: Int64? = nil, userId: String? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> Audio {
+        return try await audioWithRequestBuilder(file: file, id: id, credit: credit, userId: userId, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -71,32 +66,21 @@ open class AudioRouteAPI {
      - Bearer Token:
        - type: http
        - name: bearer
-     - parameter userId: (form)  
-     - parameter byColumn: (form)  (optional)
-     - parameter byFields: (form)  (optional)
-     - parameter byId: (form)  (optional)
-     - parameter delete: (form)  (optional)
-     - parameter paginate: (form)  (optional)
-     - parameter search: (form)  (optional)
-     - parameter update: (form)  (optional)
-     - parameter upsert: (form)  (optional)
+     - parameter file: (form)  
+     - parameter id: (form)  
+     - parameter credit: (form)  (optional)
+     - parameter userId: (form)  (optional)
      - parameter apiConfiguration: The configuration for the http request.
-     - returns: RequestBuilder<AudioServerRequest> 
+     - returns: RequestBuilder<Audio> 
      */
-    open class func audioWithRequestBuilder(userId: String, byColumn: AudioByColumn? = nil, byFields: AudioByFields? = nil, byId: AudioById? = nil, delete: AudioDelete? = nil, paginate: AudioPaginate? = nil, search: AudioSearch? = nil, update: AudioUpdate? = nil, upsert: AudioUpsert? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<AudioServerRequest> {
+    open class func audioWithRequestBuilder(file: String, id: UUID, credit: Int64? = nil, userId: String? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<Audio> {
         let localVariablePath = "/audio"
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         var localVariableParameters: [String: any Sendable] = [:]
-        if let value = byColumn { appendBracket(into: &localVariableParameters, baseName: "by_column", value: value) }
-        if let value = byFields { appendBracket(into: &localVariableParameters, baseName: "by_fields", value: value) }
-        if let value = byId { appendBracket(into: &localVariableParameters, baseName: "by_id", value: value) }
-        if let value = delete { appendBracket(into: &localVariableParameters, baseName: "delete", value: value) }
-        if let value = paginate { appendBracket(into: &localVariableParameters, baseName: "paginate", value: value) }
-        if let value = search { appendBracket(into: &localVariableParameters, baseName: "search", value: value) }
-        if let value = update { appendBracket(into: &localVariableParameters, baseName: "update", value: value) }
-        if let value = upsert { appendBracket(into: &localVariableParameters, baseName: "upsert", value: value) }
-        appendBracket(into: &localVariableParameters, baseName: "user_id", value: userId)
-        localVariableParameters["__form_file_fields"] = ["file"]
+        if let value = credit { appendBracket(into: &localVariableParameters, baseName: "credit", value: value) }
+        appendBracket(into: &localVariableParameters, baseName: "file", value: file)
+        appendBracket(into: &localVariableParameters, baseName: "id", value: id)
+        if let value = userId { appendBracket(into: &localVariableParameters, baseName: "user_id", value: value) }
         
 
         let localVariableUrlComponents = URLComponents(string: localVariableURLString)
@@ -107,7 +91,7 @@ open class AudioRouteAPI {
 
         let localVariableHeaderParameters = APIHelper.rejectNilHeaders(localVariableNillableHeaders)
 
-        let localVariableRequestBuilder: RequestBuilder<AudioServerRequest>.Type = apiConfiguration.requestBuilderFactory.getBuilder()
+        let localVariableRequestBuilder: RequestBuilder<Audio>.Type = apiConfiguration.requestBuilderFactory.getBuilder()
 
         return localVariableRequestBuilder.init(method: "POST", URLString: (localVariableUrlComponents?.string ?? localVariableURLString), parameters: localVariableParameters, headers: localVariableHeaderParameters, requiresAuthentication: true, apiConfiguration: apiConfiguration)
     }

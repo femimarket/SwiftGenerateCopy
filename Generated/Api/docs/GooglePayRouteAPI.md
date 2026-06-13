@@ -9,7 +9,7 @@ Method | HTTP request | Description
 
 # **googlePay**
 ```swift
-    open class func googlePay(userId: String, byColumn: GooglePayByColumn? = nil, byFields: GooglePayByFields? = nil, byId: GooglePayById? = nil, delete: GooglePayDelete? = nil, paginate: GooglePayPaginate? = nil, search: GooglePaySearch? = nil, update: GooglePayUpdate? = nil, upsert: GooglePayUpsert? = nil, completion: @escaping (_ data: GooglePayServerRequest?, _ error: Error?) -> Void)
+    open class func googlePay(id: UUID, purchaseToken: String, userId: String, credit: Int64? = nil, loaded: Bool? = nil, orderId: String? = nil, packageName: String? = nil, productId: String? = nil, status: Status? = nil, completion: @escaping (_ data: GooglePay?, _ error: Error?) -> Void)
 ```
 
 
@@ -19,17 +19,17 @@ Method | HTTP request | Description
 // The following code samples are still beta. For any issue, please report via http://github.com/OpenAPITools/openapi-generator/issues/new
 import Api
 
+let id = 987 // UUID | 
+let purchaseToken = "purchaseToken_example" // String | 
 let userId = "userId_example" // String | 
-let byColumn = google_pay.ByColumn(column: "column_example", data: [GooglePay(credit: 123, id: 123, loaded: false, orderId: "orderId_example", packageName: "packageName_example", productId: "productId_example", purchaseToken: "purchaseToken_example", status: Status(), userId: "userId_example")], value: 123) // GooglePayByColumn |  (optional)
-let byFields = google_pay.ByFields(data: [GooglePay(credit: 123, id: 123, loaded: false, orderId: "orderId_example", packageName: "packageName_example", productId: "productId_example", purchaseToken: "purchaseToken_example", status: Status(), userId: "userId_example")], fields: [google_pay.ByFieldsQuery(path: "path_example", value: "value_example")]) // GooglePayByFields |  (optional)
-let byId = google_pay.ById(data: GooglePay(credit: 123, id: 123, loaded: false, orderId: "orderId_example", packageName: "packageName_example", productId: "productId_example", purchaseToken: "purchaseToken_example", status: Status(), userId: "userId_example"), id: 123) // GooglePayById |  (optional)
-let delete = google_pay.Delete(data: [123]) // GooglePayDelete |  (optional)
-let paginate = google_pay.Paginate(data: [GooglePay(credit: 123, id: 123, loaded: false, orderId: "orderId_example", packageName: "packageName_example", productId: "productId_example", purchaseToken: "purchaseToken_example", status: Status(), userId: "userId_example")], skip: 123, take: 123) // GooglePayPaginate |  (optional)
-let search = google_pay.Search(data: [GooglePay(credit: 123, id: 123, loaded: false, orderId: "orderId_example", packageName: "packageName_example", productId: "productId_example", purchaseToken: "purchaseToken_example", status: Status(), userId: "userId_example")], query: "query_example") // GooglePaySearch |  (optional)
-let update = google_pay.Update(data: [GooglePay(credit: 123, id: 123, loaded: false, orderId: "orderId_example", packageName: "packageName_example", productId: "productId_example", purchaseToken: "purchaseToken_example", status: Status(), userId: "userId_example")], inputs: [google_pay.UpdateItem(fields: "TODO", id: 123)]) // GooglePayUpdate |  (optional)
-let upsert = google_pay.Upsert(data: [GooglePay(credit: 123, id: 123, loaded: false, orderId: "orderId_example", packageName: "packageName_example", productId: "productId_example", purchaseToken: "purchaseToken_example", status: Status(), userId: "userId_example")]) // GooglePayUpsert |  (optional)
+let credit = 987 // Int64 |  (optional)
+let loaded = true // Bool |  (optional)
+let orderId = "orderId_example" // String |  (optional)
+let packageName = "packageName_example" // String |  (optional)
+let productId = "productId_example" // String |  (optional)
+let status = Status() // Status |  (optional)
 
-GooglePayRouteAPI.googlePay(userId: userId, byColumn: byColumn, byFields: byFields, byId: byId, delete: delete, paginate: paginate, search: search, update: update, upsert: upsert) { (response, error) in
+GooglePayRouteAPI.googlePay(id: id, purchaseToken: purchaseToken, userId: userId, credit: credit, loaded: loaded, orderId: orderId, packageName: packageName, productId: productId, status: status) { (response, error) in
     guard error == nil else {
         print(error)
         return
@@ -45,19 +45,19 @@ GooglePayRouteAPI.googlePay(userId: userId, byColumn: byColumn, byFields: byFiel
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
+ **id** | **UUID** |  | 
+ **purchaseToken** | **String** |  | 
  **userId** | **String** |  | 
- **byColumn** | [**GooglePayByColumn**](GooglePayByColumn.md) |  | [optional] 
- **byFields** | [**GooglePayByFields**](GooglePayByFields.md) |  | [optional] 
- **byId** | [**GooglePayById**](GooglePayById.md) |  | [optional] 
- **delete** | [**GooglePayDelete**](GooglePayDelete.md) |  | [optional] 
- **paginate** | [**GooglePayPaginate**](GooglePayPaginate.md) |  | [optional] 
- **search** | [**GooglePaySearch**](GooglePaySearch.md) |  | [optional] 
- **update** | [**GooglePayUpdate**](GooglePayUpdate.md) |  | [optional] 
- **upsert** | [**GooglePayUpsert**](GooglePayUpsert.md) |  | [optional] 
+ **credit** | **Int64** |  | [optional] 
+ **loaded** | **Bool** |  | [optional] 
+ **orderId** | **String** |  | [optional] 
+ **packageName** | **String** |  | [optional] 
+ **productId** | **String** |  | [optional] 
+ **status** | [**Status**](Status.md) |  | [optional] 
 
 ### Return type
 
-[**GooglePayServerRequest**](GooglePayServerRequest.md)
+[**GooglePay**](GooglePay.md)
 
 ### Authorization
 

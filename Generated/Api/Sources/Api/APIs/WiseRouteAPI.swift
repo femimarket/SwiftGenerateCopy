@@ -50,20 +50,20 @@ open class WiseRouteAPI {
 
     /**
 
+     - parameter amountCents: (form)  
+     - parameter currency: (form)  
+     - parameter id: (form)  
+     - parameter reference: (form)  
+     - parameter status: (form)  
      - parameter userId: (form)  
-     - parameter byColumn: (form)  (optional)
-     - parameter byFields: (form)  (optional)
-     - parameter byId: (form)  (optional)
-     - parameter delete: (form)  (optional)
-     - parameter paginate: (form)  (optional)
-     - parameter search: (form)  (optional)
-     - parameter update: (form)  (optional)
-     - parameter upsert: (form)  (optional)
+     - parameter credit: (form)  (optional)
+     - parameter loaded: (form)  (optional)
+     - parameter wiseCreditId: (form)  (optional)
      - parameter apiConfiguration: The configuration for the http request.
-     - returns: WiseServerRequest
+     - returns: Wise
      */
-    open class func wise(userId: String, byColumn: WiseByColumn? = nil, byFields: WiseByFields? = nil, byId: WiseById? = nil, delete: WiseDelete? = nil, paginate: WisePaginate? = nil, search: WiseSearch? = nil, update: WiseUpdate? = nil, upsert: WiseUpsert? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> WiseServerRequest {
-        return try await wiseWithRequestBuilder(userId: userId, byColumn: byColumn, byFields: byFields, byId: byId, delete: delete, paginate: paginate, search: search, update: update, upsert: upsert, apiConfiguration: apiConfiguration).execute().body
+    open class func wise(amountCents: Int64, currency: String, id: UUID, reference: String, status: Status, userId: String, credit: Int64? = nil, loaded: Bool? = nil, wiseCreditId: String? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> Wise {
+        return try await wiseWithRequestBuilder(amountCents: amountCents, currency: currency, id: id, reference: reference, status: status, userId: userId, credit: credit, loaded: loaded, wiseCreditId: wiseCreditId, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -71,31 +71,31 @@ open class WiseRouteAPI {
      - Bearer Token:
        - type: http
        - name: bearer
+     - parameter amountCents: (form)  
+     - parameter currency: (form)  
+     - parameter id: (form)  
+     - parameter reference: (form)  
+     - parameter status: (form)  
      - parameter userId: (form)  
-     - parameter byColumn: (form)  (optional)
-     - parameter byFields: (form)  (optional)
-     - parameter byId: (form)  (optional)
-     - parameter delete: (form)  (optional)
-     - parameter paginate: (form)  (optional)
-     - parameter search: (form)  (optional)
-     - parameter update: (form)  (optional)
-     - parameter upsert: (form)  (optional)
+     - parameter credit: (form)  (optional)
+     - parameter loaded: (form)  (optional)
+     - parameter wiseCreditId: (form)  (optional)
      - parameter apiConfiguration: The configuration for the http request.
-     - returns: RequestBuilder<WiseServerRequest> 
+     - returns: RequestBuilder<Wise> 
      */
-    open class func wiseWithRequestBuilder(userId: String, byColumn: WiseByColumn? = nil, byFields: WiseByFields? = nil, byId: WiseById? = nil, delete: WiseDelete? = nil, paginate: WisePaginate? = nil, search: WiseSearch? = nil, update: WiseUpdate? = nil, upsert: WiseUpsert? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<WiseServerRequest> {
+    open class func wiseWithRequestBuilder(amountCents: Int64, currency: String, id: UUID, reference: String, status: Status, userId: String, credit: Int64? = nil, loaded: Bool? = nil, wiseCreditId: String? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<Wise> {
         let localVariablePath = "/wise"
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         var localVariableParameters: [String: any Sendable] = [:]
-        if let value = byColumn { appendBracket(into: &localVariableParameters, baseName: "by_column", value: value) }
-        if let value = byFields { appendBracket(into: &localVariableParameters, baseName: "by_fields", value: value) }
-        if let value = byId { appendBracket(into: &localVariableParameters, baseName: "by_id", value: value) }
-        if let value = delete { appendBracket(into: &localVariableParameters, baseName: "delete", value: value) }
-        if let value = paginate { appendBracket(into: &localVariableParameters, baseName: "paginate", value: value) }
-        if let value = search { appendBracket(into: &localVariableParameters, baseName: "search", value: value) }
-        if let value = update { appendBracket(into: &localVariableParameters, baseName: "update", value: value) }
-        if let value = upsert { appendBracket(into: &localVariableParameters, baseName: "upsert", value: value) }
+        appendBracket(into: &localVariableParameters, baseName: "amount_cents", value: amountCents)
+        if let value = credit { appendBracket(into: &localVariableParameters, baseName: "credit", value: value) }
+        appendBracket(into: &localVariableParameters, baseName: "currency", value: currency)
+        appendBracket(into: &localVariableParameters, baseName: "id", value: id)
+        if let value = loaded { appendBracket(into: &localVariableParameters, baseName: "loaded", value: value) }
+        appendBracket(into: &localVariableParameters, baseName: "reference", value: reference)
+        appendBracket(into: &localVariableParameters, baseName: "status", value: status)
         appendBracket(into: &localVariableParameters, baseName: "user_id", value: userId)
+        if let value = wiseCreditId { appendBracket(into: &localVariableParameters, baseName: "wise_credit_id", value: value) }
         
 
         let localVariableUrlComponents = URLComponents(string: localVariableURLString)
@@ -106,7 +106,7 @@ open class WiseRouteAPI {
 
         let localVariableHeaderParameters = APIHelper.rejectNilHeaders(localVariableNillableHeaders)
 
-        let localVariableRequestBuilder: RequestBuilder<WiseServerRequest>.Type = apiConfiguration.requestBuilderFactory.getBuilder()
+        let localVariableRequestBuilder: RequestBuilder<Wise>.Type = apiConfiguration.requestBuilderFactory.getBuilder()
 
         return localVariableRequestBuilder.init(method: "POST", URLString: (localVariableUrlComponents?.string ?? localVariableURLString), parameters: localVariableParameters, headers: localVariableHeaderParameters, requiresAuthentication: true, apiConfiguration: apiConfiguration)
     }

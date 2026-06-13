@@ -9,7 +9,7 @@ Method | HTTP request | Description
 
 # **solana**
 ```swift
-    open class func solana(userId: String, byColumn: SolanaByColumn? = nil, byFields: SolanaByFields? = nil, byId: SolanaById? = nil, delete: SolanaDelete? = nil, paginate: SolanaPaginate? = nil, search: SolanaSearch? = nil, update: SolanaUpdate? = nil, upsert: SolanaUpsert? = nil, completion: @escaping (_ data: SolanaServerRequest?, _ error: Error?) -> Void)
+    open class func solana(amountCents: Int64, id: UUID, pubkey: String, status: Status, userId: String, credit: Int64? = nil, loaded: Bool? = nil, quotedOutUnits: Int64? = nil, requestId: String? = nil, signature: String? = nil, signedTx: String? = nil, unsignedTx: String? = nil, completion: @escaping (_ data: Solana?, _ error: Error?) -> Void)
 ```
 
 
@@ -19,17 +19,20 @@ Method | HTTP request | Description
 // The following code samples are still beta. For any issue, please report via http://github.com/OpenAPITools/openapi-generator/issues/new
 import Api
 
+let amountCents = 987 // Int64 | 
+let id = 987 // UUID | 
+let pubkey = "pubkey_example" // String | 
+let status = Status() // Status | 
 let userId = "userId_example" // String | 
-let byColumn = solana.ByColumn(column: "column_example", data: [Solana(amountCents: 123, credit: 123, id: 123, loaded: false, pubkey: "pubkey_example", quotedOutUnits: 123, requestId: "requestId_example", signature: "signature_example", signedTx: "signedTx_example", status: Status(), unsignedTx: "unsignedTx_example", userId: "userId_example")], value: 123) // SolanaByColumn |  (optional)
-let byFields = solana.ByFields(data: [Solana(amountCents: 123, credit: 123, id: 123, loaded: false, pubkey: "pubkey_example", quotedOutUnits: 123, requestId: "requestId_example", signature: "signature_example", signedTx: "signedTx_example", status: Status(), unsignedTx: "unsignedTx_example", userId: "userId_example")], fields: [solana.ByFieldsQuery(path: "path_example", value: "value_example")]) // SolanaByFields |  (optional)
-let byId = solana.ById(data: Solana(amountCents: 123, credit: 123, id: 123, loaded: false, pubkey: "pubkey_example", quotedOutUnits: 123, requestId: "requestId_example", signature: "signature_example", signedTx: "signedTx_example", status: Status(), unsignedTx: "unsignedTx_example", userId: "userId_example"), id: 123) // SolanaById |  (optional)
-let delete = solana.Delete(data: [123]) // SolanaDelete |  (optional)
-let paginate = solana.Paginate(data: [Solana(amountCents: 123, credit: 123, id: 123, loaded: false, pubkey: "pubkey_example", quotedOutUnits: 123, requestId: "requestId_example", signature: "signature_example", signedTx: "signedTx_example", status: Status(), unsignedTx: "unsignedTx_example", userId: "userId_example")], skip: 123, take: 123) // SolanaPaginate |  (optional)
-let search = solana.Search(data: [Solana(amountCents: 123, credit: 123, id: 123, loaded: false, pubkey: "pubkey_example", quotedOutUnits: 123, requestId: "requestId_example", signature: "signature_example", signedTx: "signedTx_example", status: Status(), unsignedTx: "unsignedTx_example", userId: "userId_example")], query: "query_example") // SolanaSearch |  (optional)
-let update = solana.Update(data: [Solana(amountCents: 123, credit: 123, id: 123, loaded: false, pubkey: "pubkey_example", quotedOutUnits: 123, requestId: "requestId_example", signature: "signature_example", signedTx: "signedTx_example", status: Status(), unsignedTx: "unsignedTx_example", userId: "userId_example")], inputs: [solana.UpdateItem(fields: "TODO", id: 123)]) // SolanaUpdate |  (optional)
-let upsert = solana.Upsert(data: [Solana(amountCents: 123, credit: 123, id: 123, loaded: false, pubkey: "pubkey_example", quotedOutUnits: 123, requestId: "requestId_example", signature: "signature_example", signedTx: "signedTx_example", status: Status(), unsignedTx: "unsignedTx_example", userId: "userId_example")]) // SolanaUpsert |  (optional)
+let credit = 987 // Int64 |  (optional)
+let loaded = true // Bool |  (optional)
+let quotedOutUnits = 987 // Int64 |  (optional)
+let requestId = "requestId_example" // String |  (optional)
+let signature = "signature_example" // String |  (optional)
+let signedTx = "signedTx_example" // String |  (optional)
+let unsignedTx = "unsignedTx_example" // String |  (optional)
 
-SolanaRouteAPI.solana(userId: userId, byColumn: byColumn, byFields: byFields, byId: byId, delete: delete, paginate: paginate, search: search, update: update, upsert: upsert) { (response, error) in
+SolanaRouteAPI.solana(amountCents: amountCents, id: id, pubkey: pubkey, status: status, userId: userId, credit: credit, loaded: loaded, quotedOutUnits: quotedOutUnits, requestId: requestId, signature: signature, signedTx: signedTx, unsignedTx: unsignedTx) { (response, error) in
     guard error == nil else {
         print(error)
         return
@@ -45,19 +48,22 @@ SolanaRouteAPI.solana(userId: userId, byColumn: byColumn, byFields: byFields, by
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
+ **amountCents** | **Int64** |  | 
+ **id** | **UUID** |  | 
+ **pubkey** | **String** |  | 
+ **status** | [**Status**](Status.md) |  | 
  **userId** | **String** |  | 
- **byColumn** | [**SolanaByColumn**](SolanaByColumn.md) |  | [optional] 
- **byFields** | [**SolanaByFields**](SolanaByFields.md) |  | [optional] 
- **byId** | [**SolanaById**](SolanaById.md) |  | [optional] 
- **delete** | [**SolanaDelete**](SolanaDelete.md) |  | [optional] 
- **paginate** | [**SolanaPaginate**](SolanaPaginate.md) |  | [optional] 
- **search** | [**SolanaSearch**](SolanaSearch.md) |  | [optional] 
- **update** | [**SolanaUpdate**](SolanaUpdate.md) |  | [optional] 
- **upsert** | [**SolanaUpsert**](SolanaUpsert.md) |  | [optional] 
+ **credit** | **Int64** |  | [optional] 
+ **loaded** | **Bool** |  | [optional] 
+ **quotedOutUnits** | **Int64** |  | [optional] 
+ **requestId** | **String** |  | [optional] 
+ **signature** | **String** |  | [optional] 
+ **signedTx** | **String** |  | [optional] 
+ **unsignedTx** | **String** |  | [optional] 
 
 ### Return type
 
-[**SolanaServerRequest**](SolanaServerRequest.md)
+[**Solana**](Solana.md)
 
 ### Authorization
 

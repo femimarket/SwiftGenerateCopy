@@ -11,6 +11,7 @@ Name | Type | Description | Notes
 **search** | [**AudioSearch**](AudioSearch.md) |  | [optional] 
 **update** | [**AudioUpdate**](AudioUpdate.md) |  | [optional] 
 **upsert** | [**AudioUpsert**](AudioUpsert.md) |  | [optional] 
+**upsert1** | [**AudioUpsert1**](AudioUpsert1.md) |  | [optional] 
 **userId** | **String** |  | 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

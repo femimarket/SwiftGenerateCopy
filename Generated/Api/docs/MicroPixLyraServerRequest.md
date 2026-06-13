@@ -11,6 +11,7 @@ Name | Type | Description | Notes
 **search** | [**MicroPixLyraSearch**](MicroPixLyraSearch.md) |  | [optional] 
 **update** | [**MicroPixLyraUpdate**](MicroPixLyraUpdate.md) |  | [optional] 
 **upsert** | [**MicroPixLyraUpsert**](MicroPixLyraUpsert.md) |  | [optional] 
+**upsert1** | [**MicroPixLyraUpsert1**](MicroPixLyraUpsert1.md) |  | [optional] 
 **userId** | **String** |  | 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

@@ -9,7 +9,7 @@ Method | HTTP request | Description
 
 # **microPixVega**
 ```swift
-    open class func microPixVega(userId: String, byColumn: MicroPixVegaByColumn? = nil, byFields: MicroPixVegaByFields? = nil, byId: MicroPixVegaById? = nil, delete: MicroPixVegaDelete? = nil, paginate: MicroPixVegaPaginate? = nil, search: MicroPixVegaSearch? = nil, update: MicroPixVegaUpdate? = nil, upsert: MicroPixVegaUpsert? = nil, completion: @escaping (_ data: MicroPixVegaServerRequest?, _ error: Error?) -> Void)
+    open class func microPixVega(userId: String, byColumn: MicroPixVegaByColumn? = nil, byFields: MicroPixVegaByFields? = nil, byId: MicroPixVegaById? = nil, delete: MicroPixVegaDelete? = nil, paginate: MicroPixVegaPaginate? = nil, search: MicroPixVegaSearch? = nil, update: MicroPixVegaUpdate? = nil, upsert: MicroPixVegaUpsert? = nil, upsert1: MicroPixVegaUpsert1? = nil, completion: @escaping (_ data: MicroPixVegaServerRequest?, _ error: Error?) -> Void)
 ```
 
 
@@ -28,8 +28,9 @@ let paginate = micro_pix_vega.Paginate(data: [MicroPixVega(credit: 123, file: "f
 let search = micro_pix_vega.Search(data: [MicroPixVega(credit: 123, file: "file_example", id: 123, prompt: "prompt_example", requestId: "requestId_example", status: Status(), userId: "userId_example")], query: "query_example") // MicroPixVegaSearch |  (optional)
 let update = micro_pix_vega.Update(data: [MicroPixVega(credit: 123, file: "file_example", id: 123, prompt: "prompt_example", requestId: "requestId_example", status: Status(), userId: "userId_example")], inputs: [micro_pix_vega.UpdateItem(fields: "TODO", id: 123)]) // MicroPixVegaUpdate |  (optional)
 let upsert = micro_pix_vega.Upsert(data: [MicroPixVega(credit: 123, file: "file_example", id: 123, prompt: "prompt_example", requestId: "requestId_example", status: Status(), userId: "userId_example")]) // MicroPixVegaUpsert |  (optional)
+let upsert1 = micro_pix_vega.Upsert1(data: MicroPixVega(credit: 123, file: "file_example", id: 123, prompt: "prompt_example", requestId: "requestId_example", status: Status(), userId: "userId_example")) // MicroPixVegaUpsert1 |  (optional)
 
-MicroPixVegaRouteAPI.microPixVega(userId: userId, byColumn: byColumn, byFields: byFields, byId: byId, delete: delete, paginate: paginate, search: search, update: update, upsert: upsert) { (response, error) in
+MicroPixVegaRouteAPI.microPixVega(userId: userId, byColumn: byColumn, byFields: byFields, byId: byId, delete: delete, paginate: paginate, search: search, update: update, upsert: upsert, upsert1: upsert1) { (response, error) in
     guard error == nil else {
         print(error)
         return
@@ -54,6 +55,7 @@ Name | Type | Description  | Notes
  **search** | [**MicroPixVegaSearch**](MicroPixVegaSearch.md) |  | [optional] 
  **update** | [**MicroPixVegaUpdate**](MicroPixVegaUpdate.md) |  | [optional] 
  **upsert** | [**MicroPixVegaUpsert**](MicroPixVegaUpsert.md) |  | [optional] 
+ **upsert1** | [**MicroPixVegaUpsert1**](MicroPixVegaUpsert1.md) |  | [optional] 
 
 ### Return type
 

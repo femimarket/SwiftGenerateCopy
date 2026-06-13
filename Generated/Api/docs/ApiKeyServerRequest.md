@@ -11,6 +11,7 @@ Name | Type | Description | Notes
 **search** | [**ApiKeySearch**](ApiKeySearch.md) |  | [optional] 
 **update** | [**ApiKeyUpdate**](ApiKeyUpdate.md) |  | [optional] 
 **upsert** | [**ApiKeyUpsert**](ApiKeyUpsert.md) |  | [optional] 
+**upsert1** | [**ApiKeyUpsert1**](ApiKeyUpsert1.md) |  | [optional] 
 **userId** | **String** |  | 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

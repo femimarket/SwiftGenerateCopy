@@ -50,20 +50,20 @@ open class GooglePayRouteAPI {
 
     /**
 
+     - parameter id: (form)  
+     - parameter purchaseToken: (form)  
      - parameter userId: (form)  
-     - parameter byColumn: (form)  (optional)
-     - parameter byFields: (form)  (optional)
-     - parameter byId: (form)  (optional)
-     - parameter delete: (form)  (optional)
-     - parameter paginate: (form)  (optional)
-     - parameter search: (form)  (optional)
-     - parameter update: (form)  (optional)
-     - parameter upsert: (form)  (optional)
+     - parameter credit: (form)  (optional)
+     - parameter loaded: (form)  (optional)
+     - parameter orderId: (form)  (optional)
+     - parameter packageName: (form)  (optional)
+     - parameter productId: (form)  (optional)
+     - parameter status: (form)  (optional)
      - parameter apiConfiguration: The configuration for the http request.
-     - returns: GooglePayServerRequest
+     - returns: GooglePay
      */
-    open class func googlePay(userId: String, byColumn: GooglePayByColumn? = nil, byFields: GooglePayByFields? = nil, byId: GooglePayById? = nil, delete: GooglePayDelete? = nil, paginate: GooglePayPaginate? = nil, search: GooglePaySearch? = nil, update: GooglePayUpdate? = nil, upsert: GooglePayUpsert? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> GooglePayServerRequest {
-        return try await googlePayWithRequestBuilder(userId: userId, byColumn: byColumn, byFields: byFields, byId: byId, delete: delete, paginate: paginate, search: search, update: update, upsert: upsert, apiConfiguration: apiConfiguration).execute().body
+    open class func googlePay(id: UUID, purchaseToken: String, userId: String, credit: Int64? = nil, loaded: Bool? = nil, orderId: String? = nil, packageName: String? = nil, productId: String? = nil, status: Status? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) async throws(ErrorResponse) -> GooglePay {
+        return try await googlePayWithRequestBuilder(id: id, purchaseToken: purchaseToken, userId: userId, credit: credit, loaded: loaded, orderId: orderId, packageName: packageName, productId: productId, status: status, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -71,30 +71,30 @@ open class GooglePayRouteAPI {
      - Bearer Token:
        - type: http
        - name: bearer
+     - parameter id: (form)  
+     - parameter purchaseToken: (form)  
      - parameter userId: (form)  
-     - parameter byColumn: (form)  (optional)
-     - parameter byFields: (form)  (optional)
-     - parameter byId: (form)  (optional)
-     - parameter delete: (form)  (optional)
-     - parameter paginate: (form)  (optional)
-     - parameter search: (form)  (optional)
-     - parameter update: (form)  (optional)
-     - parameter upsert: (form)  (optional)
+     - parameter credit: (form)  (optional)
+     - parameter loaded: (form)  (optional)
+     - parameter orderId: (form)  (optional)
+     - parameter packageName: (form)  (optional)
+     - parameter productId: (form)  (optional)
+     - parameter status: (form)  (optional)
      - parameter apiConfiguration: The configuration for the http request.
-     - returns: RequestBuilder<GooglePayServerRequest> 
+     - returns: RequestBuilder<GooglePay> 
      */
-    open class func googlePayWithRequestBuilder(userId: String, byColumn: GooglePayByColumn? = nil, byFields: GooglePayByFields? = nil, byId: GooglePayById? = nil, delete: GooglePayDelete? = nil, paginate: GooglePayPaginate? = nil, search: GooglePaySearch? = nil, update: GooglePayUpdate? = nil, upsert: GooglePayUpsert? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<GooglePayServerRequest> {
+    open class func googlePayWithRequestBuilder(id: UUID, purchaseToken: String, userId: String, credit: Int64? = nil, loaded: Bool? = nil, orderId: String? = nil, packageName: String? = nil, productId: String? = nil, status: Status? = nil, apiConfiguration: ApiAPIConfiguration = ApiAPIConfiguration.shared) -> RequestBuilder<GooglePay> {
         let localVariablePath = "/google_pay"
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         var localVariableParameters: [String: any Sendable] = [:]
-        if let value = byColumn { appendBracket(into: &localVariableParameters, baseName: "by_column", value: value) }
-        if let value = byFields { appendBracket(into: &localVariableParameters, baseName: "by_fields", value: value) }
-        if let value = byId { appendBracket(into: &localVariableParameters, baseName: "by_id", value: value) }
-        if let value = delete { appendBracket(into: &localVariableParameters, baseName: "delete", value: value) }
-        if let value = paginate { appendBracket(into: &localVariableParameters, baseName: "paginate", value: value) }
-        if let value = search { appendBracket(into: &localVariableParameters, baseName: "search", value: value) }
-        if let value = update { appendBracket(into: &localVariableParameters, baseName: "update", value: value) }
-        if let value = upsert { appendBracket(into: &localVariableParameters, baseName: "upsert", value: value) }
+        if let value = credit { appendBracket(into: &localVariableParameters, baseName: "credit", value: value) }
+        appendBracket(into: &localVariableParameters, baseName: "id", value: id)
+        if let value = loaded { appendBracket(into: &localVariableParameters, baseName: "loaded", value: value) }
+        if let value = orderId { appendBracket(into: &localVariableParameters, baseName: "order_id", value: value) }
+        if let value = packageName { appendBracket(into: &localVariableParameters, baseName: "package_name", value: value) }
+        if let value = productId { appendBracket(into: &localVariableParameters, baseName: "product_id", value: value) }
+        appendBracket(into: &localVariableParameters, baseName: "purchase_token", value: purchaseToken)
+        if let value = status { appendBracket(into: &localVariableParameters, baseName: "status", value: value) }
         appendBracket(into: &localVariableParameters, baseName: "user_id", value: userId)
         
 
@@ -106,7 +106,7 @@ open class GooglePayRouteAPI {
 
         let localVariableHeaderParameters = APIHelper.rejectNilHeaders(localVariableNillableHeaders)
 
-        let localVariableRequestBuilder: RequestBuilder<GooglePayServerRequest>.Type = apiConfiguration.requestBuilderFactory.getBuilder()
+        let localVariableRequestBuilder: RequestBuilder<GooglePay>.Type = apiConfiguration.requestBuilderFactory.getBuilder()
 
         return localVariableRequestBuilder.init(method: "POST", URLString: (localVariableUrlComponents?.string ?? localVariableURLString), parameters: localVariableParameters, headers: localVariableHeaderParameters, requiresAuthentication: true, apiConfiguration: apiConfiguration)
     }

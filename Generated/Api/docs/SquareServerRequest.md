@@ -11,6 +11,7 @@ Name | Type | Description | Notes
 **search** | [**SquareSearch**](SquareSearch.md) |  | [optional] 
 **update** | [**SquareUpdate**](SquareUpdate.md) |  | [optional] 
 **upsert** | [**SquareUpsert**](SquareUpsert.md) |  | [optional] 
+**upsert1** | [**SquareUpsert1**](SquareUpsert1.md) |  | [optional] 
 **userId** | **String** |  | 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

@@ -11,6 +11,7 @@ Name | Type | Description | Notes
 **search** | [**StripeSearch**](StripeSearch.md) |  | [optional] 
 **update** | [**StripeUpdate**](StripeUpdate.md) |  | [optional] 
 **upsert** | [**StripeUpsert**](StripeUpsert.md) |  | [optional] 
+**upsert1** | [**StripeUpsert1**](StripeUpsert1.md) |  | [optional] 
 **userId** | **String** |  | 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
