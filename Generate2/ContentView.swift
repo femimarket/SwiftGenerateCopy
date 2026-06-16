@@ -13,7 +13,6 @@ import PhotosUI
 import Observation
 import FoundationModels
 import Api
-import AudioMarker
 
 
 // MARK: - Pending action (derive-mode init payload)
@@ -118,7 +117,7 @@ extension UUID {
     /// Time-ordered UUID v7: 48-bit ms timestamp + version/variant bits +
     /// random tail. Server's `/upload`, `/api`, etc. specify v7 — Foundation's
     /// `UUID()` is v4 and would not satisfy the contract.
-    static func v7() -> UUID {
+    nonisolated static func v7() -> UUID {
         var b = [UInt8](repeating: 0, count: 16)
         let ms = UInt64(Date().timeIntervalSince1970 * 1000)
         b[0] = UInt8((ms >> 40) & 0xff)
@@ -290,7 +289,7 @@ private enum FemiApiRoute {
         requestId: String = "",
         status: ApiStatus = .pending
     ) async throws -> API {
-        try await ApiRouteAPI.api(
+        try await ApiAPI.api(
             action: action,
             audio: audio,
             balance: 0,
@@ -622,7 +621,7 @@ final class FemiGenerateViewModel {
     var pendingImages: [FemiPendingImage] = []
     var pendingGenerations: [FemiPendingGeneration] = []
 
-    var credit: Credit?
+    var creditBalance: Int64?
     var pricing: ApiPricing?
     var loadingBalance = false
     var errorMessage: String?
@@ -632,7 +631,6 @@ final class FemiGenerateViewModel {
     /// awaits this when credits run dry — parent shows its own sheet, resolves
     /// the closure when its purchase flow completes (success or cancel).
     var onTopupNeeded: (() async -> Bool)?
-    var presentingLyricPaste = false
     var presentingProjects = false
     var presentingNewSong = false
 
@@ -713,26 +711,11 @@ final class FemiGenerateViewModel {
 
     // MARK: - Lyrics + line cursor
 
-    /// User pastes lyrics from the scene player. Stub force-alignment: split on
-    /// newlines, assign equal 6s windows. Server-side WhisperX alignment is the
-    /// real path — this client stub exists so the UX can land without it.
-    func pasteLyrics(_ text: String) {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        let rawLines = trimmed
-            .components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        let lines = rawLines.enumerated().map { idx, text in
-            FemiSongLine(
-                id: UUID(),
-                index: idx,
-                text: text,
-                startMs: idx * 6_000,
-                durationMs: 6_000
-            )
-        }
-        self.lyrics = trimmed
+    /// Apply audio-extracted SYLT lines (via `LyricExtractor.read`). Empty
+    /// input is treated as "no lyrics" — leaves `audiolines` untouched so the
+    /// grid stays flat.
+    func applyAudiolines(_ lines: [FemiSongLine]) {
+        guard !lines.isEmpty else { return }
         withAnimation(.spring(duration: 0.5)) {
             self.audiolines = lines
             backfillLineIndices()
@@ -852,11 +835,12 @@ final class FemiGenerateViewModel {
         loadingBalance = true
         defer { loadingBalance = false }
         loadProjectGenerationsFromDisk()
+        if let song = FemiLocalStore.uploadSong { extractAudiolines(filename: song) }
         async let balance = try? service.currentBalance()
         async let pricing = try? service.currentPricing()
         async let projects = try? service.allProjects()
         if let balance = await balance {
-            self.credit = Credit(credits: balance)
+            self.creditBalance = balance
         }
         self.pricing = await pricing
         let loaded = await projects ?? []
@@ -943,7 +927,9 @@ final class FemiGenerateViewModel {
 
     /// Parent's song picker returned audio bytes + a suggested filename.
     /// Save to the current project's folder on disk and reset local state
-    /// so the grid reflects the new song.
+    /// so the grid reflects the new song. Kicks off off-main SYLT extraction
+    /// — if the file carries timestamped lyrics, the grid switches to the
+    /// sectioned-by-line layout once `audiolines` lands.
     func handleSongDataPicked(data: Data, filename: String) {
         ProjectService.saveFile(data, named: filename)
         FemiLocalStore.uploadSong = filename
@@ -958,6 +944,20 @@ final class FemiGenerateViewModel {
             self.selectedImageIds = []
             self.isSelectingForVideo = false
             self.phase = .grid
+        }
+        extractAudiolines(filename: filename)
+    }
+
+    /// Off-main SYLT read via AudioMarker. No-op when the audio has no
+    /// embedded lyrics — `applyAudiolines([])` early-returns.
+    private func extractAudiolines(filename: String) {
+        ProjectService.ensureCurrentProject()
+        let url = ProjectService.documents
+            .appendingPathComponent(ProjectService.current!)
+            .appendingPathComponent(filename)
+        Task.detached { [weak self] in
+            let lines = LyricExtractor.read(audioURL: url)
+            await self?.applyAudiolines(lines)
         }
     }
 
@@ -1360,11 +1360,11 @@ final class FemiGenerateViewModel {
             Task { await refreshPricing() }
             return false
         }
-        guard let c = credit else {
+        guard let c = creditBalance else {
             Task { await refreshCredit() }
             return false
         }
-        if c.credits <= minimumBalanceForGeneration || c.credits < cost {
+        if c <= minimumBalanceForGeneration || c < cost {
             // Parent app owns the topup UX. Fire its closure; on success,
             // refresh balance and re-fire the original action.
             Task { [weak self] in
@@ -1380,7 +1380,7 @@ final class FemiGenerateViewModel {
 
     func refreshCredit() async {
         if let balance = try? await service.currentBalance() {
-            credit = Credit(credits: balance)
+            creditBalance = balance
         }
     }
 
@@ -1580,7 +1580,6 @@ private struct VideoDetailView: View {
     @Bindable var viewModel: FemiGenerateViewModel
     let onDismiss: () -> Void
     @State private var player: AVPlayer?
-    @State private var presentingLyricPaste = false
 
     var body: some View {
         ZStack {
@@ -1606,50 +1605,10 @@ private struct VideoDetailView: View {
                     .padding(16)
                 }
                 Spacer()
-                lyricsAffordance
             }
         }
         .task { setupPlayback() }
         .onDisappear { teardownPlayback() }
-    }
-
-    /// Revelation moment: subtle affordance offering lyric overlay + perfect
-    /// timing. Hidden once the user has pasted lyrics — at that point the
-    /// machinery is in place and the overlay would be the next premium ask.
-    @ViewBuilder
-    private var lyricsAffordance: some View {
-        if viewModel.audiolines == nil {
-            Button {
-                presentingLyricPaste = true
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "text.justify.left")
-                        .font(.subheadline.weight(.semibold))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Add your lyrics")
-                            .font(.subheadline.weight(.semibold))
-                        Text("Make every moment sync to your words.")
-                            .font(.caption2)
-                            .foregroundStyle(.white.opacity(0.7))
-                    }
-                    Spacer(minLength: 8)
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.bold))
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(.ultraThinMaterial, in: .rect(cornerRadius: 18))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18)
-                        .stroke(FemiTheme.accentMagenta.opacity(0.45), lineWidth: 1)
-                )
-                .padding(.horizontal, 20)
-                .padding(.bottom, 32)
-            }
-            .buttonStyle(.plain)
-            .transition(.opacity.combined(with: .move(edge: .bottom)))
-        }
     }
 
     private func setupPlayback() {

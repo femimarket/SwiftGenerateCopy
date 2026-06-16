@@ -12,14 +12,15 @@ let package = Package(
         ),
     ],
     dependencies: [
-        // Sibling relative path to the generated Api package.
-        .package(path: "../Generated/Api"),
+        .package(url: "https://github.com/femimarket/swiftapi", from: "0.1.0"),
+        .package(url: "https://github.com/atelier-socle/swift-audio-marker", from: "0.1.1"),
     ],
     targets: [
         .target(
             name: "Generate2",
             dependencies: [
-                .product(name: "Api", package: "Api"),
+                .product(name: "Api", package: "swiftapi"),
+                .product(name: "AudioMarker", package: "swift-audio-marker"),
             ],
             path: ".",
             exclude: [
