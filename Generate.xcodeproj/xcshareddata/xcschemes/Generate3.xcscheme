@@ -15,9 +15,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "144973A72FCC2863001424BC"
-               BuildableName = "Generate.app"
-               BlueprintName = "Generate"
+               BlueprintIdentifier = "14A6AD712FE2065900BFF1E5"
+               BuildableName = "Generate3.app"
+               BlueprintName = "Generate3"
                ReferencedContainer = "container:Generate.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -35,9 +35,20 @@
             parallelizable = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "14F0D8172FE20502005DEEA5"
-               BuildableName = "Test.xctest"
-               BlueprintName = "Test"
+               BlueprintIdentifier = "14A6AD7D2FE2065A00BFF1E5"
+               BuildableName = "Generate3Tests.xctest"
+               BlueprintName = "Generate3Tests"
+               ReferencedContainer = "container:Generate.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "14A6AD872FE2065A00BFF1E5"
+               BuildableName = "Generate3UITests.xctest"
+               BlueprintName = "Generate3UITests"
                ReferencedContainer = "container:Generate.xcodeproj">
             </BuildableReference>
          </TestableReference>
@@ -58,18 +69,12 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "144973A72FCC2863001424BC"
-            BuildableName = "Generate.app"
-            BlueprintName = "Generate"
+            BlueprintIdentifier = "14A6AD712FE2065900BFF1E5"
+            BuildableName = "Generate3.app"
+            BlueprintName = "Generate3"
             ReferencedContainer = "container:Generate.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
-      <CommandLineArguments>
-         <CommandLineArgument
-            argument = "-devSeedGrid YES"
-            isEnabled = "YES">
-         </CommandLineArgument>
-      </CommandLineArguments>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"
@@ -81,9 +86,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "144973A72FCC2863001424BC"
-            BuildableName = "Generate.app"
-            BlueprintName = "Generate"
+            BlueprintIdentifier = "14A6AD712FE2065900BFF1E5"
+            BuildableName = "Generate3.app"
+            BlueprintName = "Generate3"
             ReferencedContainer = "container:Generate.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>

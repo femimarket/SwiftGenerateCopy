@@ -15,9 +15,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "144973A72FCC2863001424BC"
-               BuildableName = "Generate.app"
-               BlueprintName = "Generate"
+               BlueprintIdentifier = "14073E912FDDBBDF00EE9C5D"
+               BuildableName = "Generate2.app"
+               BlueprintName = "Generate2"
                ReferencedContainer = "container:Generate.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -29,19 +29,6 @@
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES"
       shouldAutocreateTestPlan = "YES">
-      <Testables>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "14F0D8172FE20502005DEEA5"
-               BuildableName = "Test.xctest"
-               BlueprintName = "Test"
-               ReferencedContainer = "container:Generate.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
-      </Testables>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"
@@ -58,18 +45,12 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "144973A72FCC2863001424BC"
-            BuildableName = "Generate.app"
-            BlueprintName = "Generate"
+            BlueprintIdentifier = "14073E912FDDBBDF00EE9C5D"
+            BuildableName = "Generate2.app"
+            BlueprintName = "Generate2"
             ReferencedContainer = "container:Generate.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
-      <CommandLineArguments>
-         <CommandLineArgument
-            argument = "-devSeedGrid YES"
-            isEnabled = "YES">
-         </CommandLineArgument>
-      </CommandLineArguments>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"
@@ -81,9 +62,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "144973A72FCC2863001424BC"
-            BuildableName = "Generate.app"
-            BlueprintName = "Generate"
+            BlueprintIdentifier = "14073E912FDDBBDF00EE9C5D"
+            BuildableName = "Generate2.app"
+            BlueprintName = "Generate2"
             ReferencedContainer = "container:Generate.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>

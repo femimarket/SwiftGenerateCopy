@@ -1,5 +1,5 @@
 {
-  "originHash" : "c7070356d5a89a63ec0674ccd973c9a1e39db22996314da32fd7807f1a6da186",
+  "originHash" : "c372d8057e238d5716d29fd25894b5d71dc8fd0b498d6f60ccf0a3471a7e1edd",
   "pins" : [
     {
       "identity" : "swift-argument-parser",
@@ -24,8 +24,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/femimarket/swift-project-service",
       "state" : {
-        "revision" : "897fbed97f613adbd90e17959072d7edd9136275",
-        "version" : "0.1.0"
+        "revision" : "3a159ae8f5762befc14aecd9f5a4cfff8dc37ad5",
+        "version" : "0.3.0"
       }
     },
     {
@@ -33,8 +33,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/femimarket/swiftapi",
       "state" : {
-        "revision" : "d4cff33aa11053fcfa2e0ea02ec14b9d1210ea5b",
-        "version" : "0.1.0"
+        "branch" : "main",
+        "revision" : "1544d31a0478db686d982c7abd2b6e2b7d73cf22"
       }
     }
   ],
