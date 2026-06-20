@@ -58,16 +58,19 @@ public struct ContentView: View {
     let pendingAction: PendingAction?
 
     /// Normal mode. Use as the initial Generate2 entry on the parent's stack.
+    /// Pass `idToken` to override the auto-IDFV bearer (e.g. simulator runs,
+    /// dev tokens). When nil, falls back to `UIDevice.current.identifierForVendor`.
     public init(
         onTopupNeeded: @escaping () async -> Bool,
         onImageTapped: @escaping (String) -> Void,
-        onUploadSong: @escaping () async -> Void
+        onUploadSong: @escaping () async -> Void,
+        idToken: String? = nil
     ) {
         self.onTopupNeeded = onTopupNeeded
         self.onImageTapped = onImageTapped
         self.onUploadSong = onUploadSong
         self.pendingAction = nil
-         Self.installBearer()
+         Self.installBearer(idToken)
     }
 
     /// Derive mode. Parent pushes this onto its stack after the team's
@@ -78,22 +81,28 @@ public struct ContentView: View {
         onImageTapped: @escaping (String) -> Void,
         onUploadSong: @escaping () async -> Void,
         filename: String,
-        tweak: String
+        tweak: String,
+        idToken: String? = nil
     ) {
         self.onTopupNeeded = onTopupNeeded
         self.onImageTapped = onImageTapped
         self.onUploadSong = onUploadSong
         self.pendingAction = PendingAction(filename: filename, tweak: tweak)
-         Self.installBearer()
+         Self.installBearer(idToken)
     }
 
-    /// Token == IDFV (`UIDevice.current.identifierForVendor`). Stable per
-    /// app+vendor+device across launches and updates; server pre-registers
-    /// each dev's IDFV. Fails fast if iOS hands back nil — should never
-    /// happen for a foreground app on a real device.
-     private static func installBearer() {
-         guard let tokenid = UIDevice.current.identifierForVendor?.uuidString else {
-             preconditionFailure("identifierForVendor returned nil")
+    /// Bearer token. When `override` is nil, uses IDFV
+    /// (`UIDevice.current.identifierForVendor`) — stable per app+vendor+device.
+    /// Override when running on simulator or with a pinned dev token.
+     private static func installBearer(_ override: String?) {
+         let tokenid: String
+         if let override {
+             tokenid = override
+         } else {
+             guard let idfv = UIDevice.current.identifierForVendor?.uuidString else {
+                 preconditionFailure("identifierForVendor returned nil")
+             }
+             tokenid = idfv
          }
          UserDefaults.standard.set(tokenid, forKey: "idToken")
          ApiAPIConfiguration.shared.customHeaders["Authorization"] = "Bearer \(tokenid)"
