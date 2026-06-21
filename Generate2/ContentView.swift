@@ -19,75 +19,42 @@ import ImageIO
 import UniformTypeIdentifiers
 
 
-// MARK: - Pending action (derive-mode init payload)
-
-/// Internal carrier for derive-mode arguments. Never crosses the public API —
-/// the parent app passes `filename` and `tweak` as flat init parameters, we
-/// pack them here for the view layer.
-struct PendingAction {
-    let filename: String
-    let tweak: String
-}
-
 // MARK: - App root
 
-/// Root view of the Generate2 library. Two modes:
-/// - **Normal**: shows the grid + chrome. When the user taps an image, fires
-///   `onImageTapped(path)` with the full on-disk path — the parent owns the
-///   NavigationStack and decides what to push (their team's "Change it"
-///   view). Parent gets server filename via `URL(fileURLWithPath:).lastPathComponent`.
-/// - **Derive**: parent pushed Generate2 with a `filename` + `tweak`. On
-///   appear, runs the derive pipeline (chat enrich → 3-model batch) and the
-///   grid fills with the results.
-///
+/// Root view of the Generate2 library. Shows the grid + chrome.
 /// Generate2 does not own a NavigationStack and emits no internal routes.
 public struct ContentView: View {
     /// Parent app's topup handler. Awaited by the credit gate when balance
     /// runs dry — parent shows its purchase UI, resolves true on success.
     let onTopupNeeded: () async -> Bool
-    /// Fired when the user taps an image in the grid. Parent receives the
-    /// full on-disk path of the tapped image and pushes its own derive screen
-    /// onto its NavigationStack.
-    let onImageTapped: (_ path: String) -> Void
     /// Fired when the user taps the song-title slot in the toolbar. Parent
     /// presents its own song picker; returns `(audio bytes, suggested
     /// filename)` on success or `nil` on cancel. Generate2 writes the bytes
     /// to disk and uses the filename as the toolbar display title.
     let onUploadSong: () async -> Void
-    /// Set only in derive mode. View runs this action on appear.
-    let pendingAction: PendingAction?
+    /// Display label for an extra entry the parent wants in the "+" menu.
+    let menuItemName1: String
+    /// SF Symbol name for the extra menu entry's icon.
+    let menuItemIcon1: String
+    /// Fired when the user taps the extra menu entry. Parent owns whatever
+    /// happens next (typically navigation away).
+    let onMenuItemTapped1: () -> Void
 
-    /// Normal mode. Use as the initial Generate2 entry on the parent's stack.
     /// Pass `idToken` to override the auto-IDFV bearer (e.g. simulator runs,
     /// dev tokens). When nil, falls back to `UIDevice.current.identifierForVendor`.
     public init(
         onTopupNeeded: @escaping () async -> Bool,
-        onImageTapped: @escaping (String) -> Void,
         onUploadSong: @escaping () async -> Void,
+        menuItemName1: String,
+        menuItemIcon1: String,
+        onMenuItemTapped1: @escaping () -> Void,
         idToken: String? = nil
     ) {
         self.onTopupNeeded = onTopupNeeded
-        self.onImageTapped = onImageTapped
         self.onUploadSong = onUploadSong
-        self.pendingAction = nil
-         Self.installBearer(idToken)
-    }
-
-    /// Derive mode. Parent pushes this onto its stack after the team's
-    /// "Change it" view collected a tweak for `filename`. Generate2 fires
-    /// the derive pipeline on appear; the grid fills with the new images.
-    public init(
-        onTopupNeeded: @escaping () async -> Bool,
-        onImageTapped: @escaping (String) -> Void,
-        onUploadSong: @escaping () async -> Void,
-        filename: String,
-        tweak: String,
-        idToken: String? = nil
-    ) {
-        self.onTopupNeeded = onTopupNeeded
-        self.onImageTapped = onImageTapped
-        self.onUploadSong = onUploadSong
-        self.pendingAction = PendingAction(filename: filename, tweak: tweak)
+        self.menuItemName1 = menuItemName1
+        self.menuItemIcon1 = menuItemIcon1
+        self.onMenuItemTapped1 = onMenuItemTapped1
          Self.installBearer(idToken)
     }
 
@@ -111,9 +78,10 @@ public struct ContentView: View {
     public var body: some View {
         Generate(
             onTopupNeeded: onTopupNeeded,
-            onImageTapped: onImageTapped,
             onUploadSong: onUploadSong,
-            pendingAction: pendingAction
+            menuItemName1: menuItemName1,
+            menuItemIcon1: menuItemIcon1,
+            onMenuItemTapped1: onMenuItemTapped1
         )
     }
 }
@@ -362,9 +330,6 @@ final class FemiGenerateViewModel {
          }
      }
 
-    /// Parent-supplied image-tap callback. Set by `Generate` on appear.
-    var onImageTapped: ((String) -> Void)?
-
     var canMakeVideo: Bool { !likedImages.isEmpty }
 
     /// Fire-and-forget. Adds a FemiPendingVideo immediately, kicks off the long generation
@@ -493,14 +458,15 @@ struct Generate: View {
     /// Parent app's topup handler — installed on the view model on appear so
     /// `gateOnCredit` can await it when credits run dry.
     let onTopupNeeded: () async -> Bool
-    /// Fired when the user taps an image in the grid. Threaded through to the
-    /// view model on appear.
-    let onImageTapped: (String) -> Void
     /// Fired when the user taps the song-title slot. Returns (bytes,
     /// suggested filename) on pick, nil on cancel.
     let onUploadSong: () async -> Void
-    /// Set only in derive mode. Runs on the first task tick after appear.
-    let pendingAction: PendingAction?
+    /// Display label for the parent-supplied "+" menu entry.
+    let menuItemName1: String
+    /// SF Symbol name for the parent-supplied menu entry.
+    let menuItemIcon1: String
+    /// Fired when the user taps the parent-supplied menu entry.
+    let onMenuItemTapped1: () -> Void
     @State private var viewModel = FemiGenerateViewModel()
     @State private var photoPickerItem: PhotosPickerItem?
     @State private var showingPhotoPicker = false
@@ -519,7 +485,6 @@ struct Generate: View {
         .preferredColorScheme(.dark)
         .task {
             viewModel.onTopupNeeded = onTopupNeeded
-            viewModel.onImageTapped = onImageTapped
             let existingImages = Set(viewModel.images)
             let existingVideos = Set(viewModel.videos.map(\.file))
             for url in ProjectService.getAllGenerations() {
@@ -546,53 +511,6 @@ struct Generate: View {
             }
             if let song = ProjectService.getAudio()?.lastPathComponent {
                 viewModel.extractAudiolines(filename: song)
-            }
-            if let pendingAction {
-                let text = pendingAction.tweak
-                let filename = pendingAction.filename
-                let sourceLine = viewModel.imageLineIndex[filename]
-                let pendings = (0..<3).map { _ in
-                    FemiPendingGeneration(id: UUID(), lineIndex: sourceLine)
-                }
-                var queue = pendings.map(\.id)
-                withAnimation(.spring(duration: 0.35)) {
-                    viewModel.pendingGenerations.append(contentsOf: pendings)
-                }
-                var topupNeeded = false
-                await withTaskGroup(of: Result<API, Error>.self) { group in
-                    for api in FemiGenerateViewModel.textToImageAPIs(prompt: text) {
-                        group.addTask {
-                            do { return .success(try await ApiHandlerAPI.apiHandler(API: api)) }
-                            catch { return .failure(error) }
-                        }
-                    }
-                    for await result in group {
-                        switch result {
-                        case .success(let row):
-                            let subject = sourceLine.map { ["line:\($0)"] }
-                            let file = FemiGenerateViewModel.saveBase64(FemiGenerateViewModel.resultFile(of: row), prompt: text, model: FemiGenerateViewModel.resultModel(of: row), subject: subject)
-                            guard !queue.isEmpty else { continue }
-                            let pid = queue.removeFirst()
-                            withAnimation(.spring(duration: 0.35)) {
-                                viewModel.pendingGenerations.removeAll { $0.id == pid }
-                                viewModel.images.append(file)
-                                if let sourceLine { viewModel.imageLineIndex[file] = sourceLine }
-                            }
-                        case .failure(let error):
-                            if case ErrorResponse.error(402, _, _, _) = error {
-                                topupNeeded = true
-                            } else {
-                                print("← derive FAIL: \(error)")
-                            }
-                        }
-                    }
-                }
-                if topupNeeded { _ = await viewModel.onTopupNeeded?() }
-                for pid in queue {
-                    if let i = viewModel.pendingGenerations.firstIndex(where: { $0.id == pid }) {
-                        viewModel.pendingGenerations[i].state = .failed
-                    }
-                }
             }
         }
         .photosPicker(isPresented: $showingPhotoPicker,
@@ -712,6 +630,11 @@ struct Generate: View {
                             showingPhotoPicker = true
                         } label: {
                             Label("Upload from Photos", systemImage: "photo")
+                        }
+                        Button {
+                            onMenuItemTapped1()
+                        } label: {
+                            Label(menuItemName1, systemImage: menuItemIcon1)
                         }
                     } label: {
                         Image(systemName: "plus")
