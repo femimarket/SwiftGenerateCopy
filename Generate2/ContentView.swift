@@ -913,7 +913,7 @@ private struct FemiMakeVideoShelf: View {
                 } else {
                     audioB64 = FemiGenerateViewModel.base64(of: audioFile)
                 }
-                let instruction = "Convert these \(imagePrompts.count) image prompts into a timestamped music-video prompt with exactly \(imagePrompts.count) timestamps in 2.5-second increments (0:00, 0:02.5, 0:05), total duration 7.5 seconds. Under 100 words.\n\n\(imagePrompts.joined(separator: "\n---\n"))"
+                let instruction = "Convert these \(imagePrompts.count) image prompts into a timestamped music-video prompt with exactly \(imagePrompts.count) multishot timestamps. Under 100 words. Return only the prompt itself — no title, no preamble, no commentary, no trailing notes, no markdown.\n\n\(imagePrompts.joined(separator: "\n---\n"))"
                 let prompt: String
                 do {
                     let claudeRow = try await ApiHandlerAPI.apiHandler(API: FemiGenerateViewModel.wrap(.typeClaudeSonnet46(ClaudeSonnet46(
