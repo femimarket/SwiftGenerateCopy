@@ -106,7 +106,6 @@ public struct ContentView: View {
          }
          UserDefaults.standard.set(tokenid, forKey: "idToken")
          ApiAPIConfiguration.shared.customHeaders["Authorization"] = "Bearer \(tokenid)"
-         ApiAPIConfiguration.shared.interceptor = LongTimeoutInterceptor()
      }
 
     public var body: some View {
@@ -117,31 +116,6 @@ public struct ContentView: View {
             pendingAction: pendingAction
         )
     }
-}
-
-/// Raises every API request's timeout to 2 minutes — video generation
-/// regularly exceeds URLSession's 60s default.
-private struct LongTimeoutInterceptor: OpenAPIInterceptor {
-    func intercept<T>(urlRequest: URLRequest, urlSession: URLSessionProtocol,
-                      requestBuilder: RequestBuilder<T>,
-                      completion: @Sendable @escaping (Result<URLRequest, Error>) -> Void) {
-        var req = urlRequest
-        req.timeoutInterval = 120
-        completion(.success(req))
-    }
-    func retry<T>(urlRequest: URLRequest, urlSession: URLSessionProtocol,
-                  requestBuilder: RequestBuilder<T>, data: Data?, response: URLResponse?,
-                  error: Error, completion: @Sendable @escaping (OpenAPIInterceptorRetry) -> Void) {
-        completion(.dontRetry)
-    }
-    func willSendRequest<T>(urlRequest: URLRequest, urlSession: URLSessionProtocol,
-                            requestBuilder: RequestBuilder<T>) {}
-    func didReceiveResponse<T>(urlRequest: URLRequest, urlSession: URLSessionProtocol,
-                               requestBuilder: RequestBuilder<T>, data: Data?,
-                               response: URLResponse?, error: Error?) {}
-    func didComplete<T>(urlRequest: URLRequest, urlSession: URLSessionProtocol,
-                        requestBuilder: RequestBuilder<T>, data: Data?,
-                        response: URLResponse?, result: Result<T, Error>) {}
 }
 
 // MARK: - FemiTheme
@@ -939,9 +913,8 @@ private struct FemiMakeVideoShelf: View {
                 } else {
                     audioB64 = FemiGenerateViewModel.base64(of: audioFile)
                 }
-                let instruction = "Convert these \(imagePrompts.count) image prompts into a timestamped music-video prompt with exactly \(imagePrompts.count) timestamps. Under 100 words.\n\n\(imagePrompts.joined(separator: "\n---\n"))"
+                let instruction = "Convert these \(imagePrompts.count) image prompts into a timestamped music-video prompt with exactly \(imagePrompts.count) timestamps in 2.5-second increments (0:00, 0:02.5, 0:05), total duration 7.5 seconds. Under 100 words.\n\n\(imagePrompts.joined(separator: "\n---\n"))"
                 let prompt: String
-                print("→ claude call: instruction=\(instruction)")
                 do {
                     let claudeRow = try await ApiHandlerAPI.apiHandler(API: FemiGenerateViewModel.wrap(.typeClaudeSonnet46(ClaudeSonnet46(
                         messages: [ApiChatMessage(content: instruction, role: .user)],
@@ -956,7 +929,6 @@ private struct FemiMakeVideoShelf: View {
                         }
                         return
                     }
-                    print("← claude OK: reply=\(reply)")
                     prompt = reply
                 } catch ErrorResponse.error(402, _, _, _) {
                     print("← claude FAIL: 402 payment required")
@@ -972,13 +944,11 @@ private struct FemiMakeVideoShelf: View {
                     }
                     return
                 }
-                print("→ video call: prompt=\(prompt) audioBytes=\(audioB64.count) imageBytes=\(imageB64.count)")
                 do {
                     let row = try await ApiHandlerAPI.apiHandler(API: FemiGenerateViewModel.wrap(.typeLtx23A2V(Ltx23A2V(
                         audio: audioB64, comfyRequestId: "", file: "", image: imageB64,
                         prompt: prompt, type: .ltx23a2v
                     ))))
-                    print("← video OK: model=\(FemiGenerateViewModel.resultModel(of: row)) bytes=\(FemiGenerateViewModel.resultFile(of: row).count)")
                     let lineSubject: [String]? = {
                         guard let idx = viewModel.imageLineIndex[primary],
                               let text = viewModel.audiolines?.first(where: { $0.index == idx })?.text
