@@ -106,6 +106,7 @@ public struct ContentView: View {
          }
          UserDefaults.standard.set(tokenid, forKey: "idToken")
          ApiAPIConfiguration.shared.customHeaders["Authorization"] = "Bearer \(tokenid)"
+         ApiAPIConfiguration.shared.interceptor = LongTimeoutInterceptor()
      }
 
     public var body: some View {
@@ -116,6 +117,31 @@ public struct ContentView: View {
             pendingAction: pendingAction
         )
     }
+}
+
+/// Raises every API request's timeout to 2 minutes — video generation
+/// regularly exceeds URLSession's 60s default.
+private struct LongTimeoutInterceptor: OpenAPIInterceptor {
+    func intercept<T>(urlRequest: URLRequest, urlSession: URLSessionProtocol,
+                      requestBuilder: RequestBuilder<T>,
+                      completion: @Sendable @escaping (Result<URLRequest, Error>) -> Void) {
+        var req = urlRequest
+        req.timeoutInterval = 120
+        completion(.success(req))
+    }
+    func retry<T>(urlRequest: URLRequest, urlSession: URLSessionProtocol,
+                  requestBuilder: RequestBuilder<T>, data: Data?, response: URLResponse?,
+                  error: Error, completion: @Sendable @escaping (OpenAPIInterceptorRetry) -> Void) {
+        completion(.dontRetry)
+    }
+    func willSendRequest<T>(urlRequest: URLRequest, urlSession: URLSessionProtocol,
+                            requestBuilder: RequestBuilder<T>) {}
+    func didReceiveResponse<T>(urlRequest: URLRequest, urlSession: URLSessionProtocol,
+                               requestBuilder: RequestBuilder<T>, data: Data?,
+                               response: URLResponse?, error: Error?) {}
+    func didComplete<T>(urlRequest: URLRequest, urlSession: URLSessionProtocol,
+                        requestBuilder: RequestBuilder<T>, data: Data?,
+                        response: URLResponse?, result: Result<T, Error>) {}
 }
 
 // MARK: - FemiTheme
@@ -302,233 +328,32 @@ final class FemiGenerateViewModel {
 //
     // generationCost / videoCost removed — cost is server-side, surfaced as 402.
 
-    // MARK: - Lyrics + line cursor
-
-    /// Apply audio-extracted SYLT lines (via `LyricExtractor.read`). Empty
-    /// input is treated as "no lyrics" — leaves `audiolines` untouched so the
-    /// grid stays flat.
-     func applyAudiolines(_ lines: [FemiSongLine]) {
-         guard !lines.isEmpty else { return }
-         withAnimation(.spring(duration: 0.5)) {
-             self.audiolines = lines
-             backfillLineIndices()
-         }
-     }
-
-    /// On first lyric paste, walk through existing untagged images and assign
-    /// them line indices in order. After this every image in `images` has a
-    /// `lineIndex` (modulo the line count if more images than lines).
-     private func backfillLineIndices() {
-         guard let audiolines, !audiolines.isEmpty else { return }
-         var nextLine = 0
-         for i in images.indices where imageLineIndex[images[i]] == nil {
-             imageLineIndex[images[i]] = audiolines[nextLine % audiolines.count].index
-             nextLine += 1
-         }
-     }
-
-    /// Cursor through the song: returns up to `count` line indices that
-    /// currently have no images. Wraps around when all lines are covered.
-     func nextUnfilledLines(count: Int) -> [Int] {
-         guard let audiolines, !audiolines.isEmpty else { return [] }
-         let used = Set(images.compactMap { imageLineIndex[$0] })
-         var result: [Int] = []
-         for line in audiolines where !used.contains(line.index) {
-             result.append(line.index)
-             if result.count >= count { return result }
-         }
-         // All lines filled at least once — fall through, wrapping by index.
-         var i = 0
-         while result.count < count {
-             result.append(audiolines[i % audiolines.count].index)
-             i += 1
-         }
-         return result
-     }
-
-    /// Stamp a fresh line index on each image in a freshly-returned batch.
-    /// Pre-lyrics this is a no-op — images stay untagged until backfill.
-     func tagBatch(_ batch: [String]) -> [String] {
-         guard audiolines != nil else { return batch }
-         let lineIndices = nextUnfilledLines(count: batch.count)
-         for (offset, image) in batch.enumerated() where offset < lineIndices.count {
-             imageLineIndex[image] = lineIndices[offset]
-         }
-         return batch
-     }
-
-    /// Power-user override (context menu on a section header): generate 3
-    /// images all tagged with the given line index. Pending cells appear in
-    /// the section immediately, real images replace them when generation
-    /// completes. Bypasses the cursor — user is directly addressing a moment.
-     func fillLine(_ lineIndex: Int) async {
-         guard let line = audiolines?.first(where: { $0.index == lineIndex }) else { return }
-         let prompt = line.text
-         let pendings = (0..<3).map { _ in
-             FemiPendingGeneration(id: UUID(), lineIndex: lineIndex)
-         }
-         var queue = pendings.map(\.id)
-         withAnimation(.spring(duration: 0.3)) {
-             pendingGenerations.append(contentsOf: pendings)
-         }
-         var topupFired = false
-         await withTaskGroup(of: (value: API?, status: Int).self) { group in
-             for api in Self.textToImageAPIs(prompt: prompt) {
-                 group.addTask { [weak self] in
-                     guard let self else { return (nil, 0) }
-                     return await self.apiCall("fillLine", {
-                         try await ApiHandlerAPI.apiHandler(API: api)
-                     })
-                 }
-             }
-             for await result in group {
-                 if let row = result.value {
-                     let file = Self.saveBase64(Self.resultFile(of: row), prompt: prompt, model: Self.resultModel(of: row), subject: ["line:\(lineIndex)"])
-                     guard !queue.isEmpty else { continue }
-                     let pid = queue.removeFirst()
-                     withAnimation(.spring(duration: 0.35)) {
-                         pendingGenerations.removeAll { $0.id == pid }
-                         images.append(file)
-                         imageLineIndex[file] = lineIndex
-                     }
-                 } else if result.status == 402, !topupFired {
-                     topupFired = true
-                     _ = await onTopupNeeded?()
-                 }
-             }
-         }
-         for pid in queue {
-             if let i = pendingGenerations.firstIndex(where: { $0.id == pid }) {
-                 pendingGenerations[i].state = .failed
-             }
-         }
-     }
-
-    // Lifecycle
-
-     func bootstrap() async {
-         loadProjectGenerationsFromDisk()
-         if let song = ProjectService.getAudio()?.lastPathComponent { extractAudiolines(filename: song) }
-     }
-
-    /// Restore prior generations from the local project folder.
-     func loadProjectGenerationsFromDisk() {
-         let existingImages = Set(images)
-         let existingVideos = Set(videos.map(\.file))
-         for url in ProjectService.getAllGenerations() {
-             let filename = url.lastPathComponent
-             let ext = url.pathExtension.lowercased()
-             if Self.isGridImageFile(filename) {
-                 if !existingImages.contains(filename) { images.append(filename) }
-             } else if ext == "mp4" {
-                 if !existingVideos.contains(filename) {
-                     videos.append(FemiGeneratedVideo(
-                         id: UUID(), file: filename, posterFile: "", sourceImageIds: []
-                     ))
-                     if let subject = ProjectService.getSubject(filename),
-                        let first = subject.first, let idx = Int(first) {
-                         videoLineIndex[filename] = idx
-                     }
-                 }
-             }
-         }
-         syncImageLikesFromDisk()
-     }
-
-    /// Mirror on-disk `xmp:Rating` into `likeStore` (new UUIDs each launch).
-     private func syncImageLikesFromDisk() {
-         for image in images where ProjectService.getLike(image) {
-             likeStore.setLiked(image, true)
-         }
-     }
-
-     private static func isGridImageFile(_ filename: String) -> Bool {
-         switch URL(fileURLWithPath: filename).pathExtension.lowercased() {
-         case "png", "jpg", "jpeg", "webp", "gif", "heic", "heif": return true
-         default: return false
-         }
-     }
-
-
-    /// Parent's song picker returned audio bytes + a suggested filename.
-    /// Save to the current project's folder on disk and reset local state
-    /// so the grid reflects the new song. Kicks off off-main SYLT extraction
-    /// — if the file carries timestamped lyrics, the grid switches to the
-    /// sectioned-by-line layout once `audiolines` lands.
-     /// Parent has just finished its song-picker flow and written audio to
-     /// `ProjectService.saveAudio(...)`. Reset our grid state and re-run
-     /// SYLT extraction from the new audio file on disk.
-     func refreshFromAudio() {
-         self.lyrics = nil
-         self.audiolines = nil
-         if let file = ProjectService.getAudio()?.lastPathComponent {
-             extractAudiolines(filename: file)
-         }
-     }
-
     /// Off-main SYLT read via AudioMarker. No-op when the audio has no
-    /// embedded lyrics — `applyAudiolines([])` early-returns.
-     private func extractAudiolines(filename: String) {
+    /// embedded lyrics.
+     fileprivate func extractAudiolines(filename: String) {
          let url = ProjectService.getUrl(for: filename)
          Task.detached { [weak self] in
              let lines = LyricExtractor.read(audioURL: url)
-             await self?.applyAudiolines(lines)
+             guard !lines.isEmpty, let self else { return }
+             await MainActor.run {
+                 withAnimation(.spring(duration: 0.5)) {
+                     self.audiolines = lines
+                     var nextLine = 0
+                     for i in self.images.indices where self.imageLineIndex[self.images[i]] == nil {
+                         self.imageLineIndex[self.images[i]] = lines[nextLine % lines.count].index
+                         nextLine += 1
+                     }
+                 }
+             }
          }
      }
 
     // MARK: - User-triggered generations
 
-    /// Toolbar "+" → "Generate". Fan out 3 image models in parallel with the
-    /// project's summary as the prompt. Each result is appended to `images`
-    /// as soon as it lands. **Topup fires at most once per batch** even if
-    /// every model returns 402 — without this guard a parallel fan-out would
-    /// stack three sheets.
-    func generate() async {
-        let pendings = (0..<3).map { _ in
-            FemiPendingGeneration(id: UUID(), lineIndex: nil)
-        }
-        var queue = pendings.map(\.id)
-        withAnimation(.spring(duration: 0.4)) {
-            pendingGenerations.append(contentsOf: pendings)
-            phase = .grid
-        }
-        let prompt = "cinematic music video still, vivid color grade, dramatic lighting, expressive performer mid-motion, shallow depth of field, 35mm film grain, emotional and atmospheric"
-        var topupFired = false
-        await withTaskGroup(of: (value: API?, status: Int).self) { group in
-            for api in Self.textToImageAPIs(prompt: prompt) {
-                group.addTask { [weak self] in
-                    guard let self else { return (nil, 0) }
-                    return await self.apiCall("generate", {
-                        try await ApiHandlerAPI.apiHandler(API: api)
-                    })
-                }
-            }
-            for await result in group {
-                if let row = result.value {
-                    let file = Self.saveBase64(Self.resultFile(of: row), model: Self.resultModel(of: row))
-                    guard !queue.isEmpty else { continue }
-                    let pid = queue.removeFirst()
-                    withAnimation(.spring(duration: 0.35)) {
-                        pendingGenerations.removeAll { $0.id == pid }
-                        images.append(file)
-                    }
-                } else if result.status == 402, !topupFired {
-                    topupFired = true
-                    _ = await onTopupNeeded?()
-                }
-            }
-        }
-        for pid in queue {
-            if let i = pendingGenerations.firstIndex(where: { $0.id == pid }) {
-                pendingGenerations[i].state = .failed
-            }
-        }
-    }
-
      /// Build the 3-model fan-out of text-to-image APIs for a given prompt.
      /// Each `API` wraps a distinct model action; the server returns the same
      /// shape with `file` populated by the result base64 / filename.
-     private static func textToImageAPIs(prompt: String) -> [API] {
+     fileprivate static func textToImageAPIs(prompt: String) -> [API] {
          let actions: [ApiAction] = [
              .typeFlux2Pro(Flux2Pro(falRequestId: "", file: "", prompt: prompt, type: .flux2Pro)),
              .typeNanoBanana2(NanoBanana2(falRequestId: "", file: "", prompt: prompt, type: .nanoBanana2)),
@@ -537,20 +362,12 @@ final class FemiGenerateViewModel {
          return actions.map { Self.wrap($0) }
      }
 
-     /// Build the single Ltx23A2V image-to-video API.
-     private static func videoAPI(prompt: String, image: String, audio: String) -> API {
-         Self.wrap(.typeLtx23A2V(Ltx23A2V(
-             audio: audio, comfyRequestId: "", file: "", image: image,
-             prompt: prompt, type: .ltx23a2v
-         )))
-     }
-
-     private static func wrap(_ action: ApiAction) -> API {
+     fileprivate static func wrap(_ action: ApiAction) -> API {
          API(action: action, credit: 0, id: UUID(), status: .pending, userId: "")
      }
 
      /// Extract the result `file` from the server's response action.
-     private static func resultFile(of api: API) -> String {
+     fileprivate static func resultFile(of api: API) -> String {
          switch api.action {
          case .typeFlux2Pro(let f): return f.file
          case .typeNanoBanana2(let f): return f.file
@@ -561,7 +378,7 @@ final class FemiGenerateViewModel {
      }
 
      /// Name of the model that produced the response — written to xmp:Model.
-     private static func resultModel(of api: API) -> String {
+     fileprivate static func resultModel(of api: API) -> String {
          switch api.action {
          case .typeFlux2Pro: return "Flux2Pro"
          case .typeNanoBanana2: return "NanoBanana2"
@@ -571,265 +388,39 @@ final class FemiGenerateViewModel {
          }
      }
 
-    // Derive
-
-    /// User tapped an image in the grid. Generate2 no longer owns the derive
-    /// destination — fire the parent's callback with the full on-disk path so
-    /// the parent can push its team's "Change it" view onto its own stack.
-     func openDerive(_ image: String) {
-         onImageTapped?(ProjectService.getUrl(for: image).path)
-     }
-
     /// Parent-supplied image-tap callback. Set by `Generate` on appear.
     var onImageTapped: ((String) -> Void)?
 
-     func dismissFemiPendingGeneration(_ id: UUID) {
-         withAnimation { pendingGenerations.removeAll { $0.id == id } }
-     }
-
-    /// Fan out a three-model derive with `tweak` as the prompt. The new
-    /// text-to-image models (Flux2Pro / NanoBanana2 / ZImageTurbo) don't
-    /// accept an image input — only Ltx23A2V does — so derive is currently
-    /// text-only. We still carry the source's line index forward so video
-    /// trimming works on the derivatives.
-     func runDerive(text: String, filename: String) async {
-         let sourceLine = imageLineIndex[filename]
-         let pendings = (0..<3).map { _ in
-             FemiPendingGeneration(id: UUID(), lineIndex: sourceLine)
-         }
-         var queue = pendings.map(\.id)
-         withAnimation(.spring(duration: 0.35)) {
-             pendingGenerations.append(contentsOf: pendings)
-         }
-         var topupFired = false
-         await withTaskGroup(of: (value: API?, status: Int).self) { group in
-             for api in Self.textToImageAPIs(prompt: text) {
-                 group.addTask { [weak self] in
-                     guard let self else { return (nil, 0) }
-                     return await self.apiCall("derive", {
-                         try await ApiHandlerAPI.apiHandler(API: api)
-                     })
-                 }
-             }
-             for await result in group {
-                 if let row = result.value {
-                     let subject = sourceLine.map { ["line:\($0)"] }
-                     let file = Self.saveBase64(Self.resultFile(of: row), prompt: text, model: Self.resultModel(of: row), subject: subject)
-                     guard !queue.isEmpty else { continue }
-                     let pid = queue.removeFirst()
-                     withAnimation(.spring(duration: 0.35)) {
-                         pendingGenerations.removeAll { $0.id == pid }
-                         images.append(file)
-                         if let sourceLine { imageLineIndex[file] = sourceLine }
-                     }
-                 } else if result.status == 402, !topupFired {
-                     topupFired = true
-                     _ = await onTopupNeeded?()
-                 }
-             }
-         }
-         for pid in queue {
-             if let i = pendingGenerations.firstIndex(where: { $0.id == pid }) {
-                 pendingGenerations[i].state = .failed
-             }
-         }
-     }
-
-    // Like
-
-     func toggleLikeImage(_ image: String) {
-         likeStore.toggle(image)
-         ProjectService.like(image, likeStore.isLiked(image))
-     }
-
-     func toggleLikeVideo(_ video: FemiGeneratedVideo) {
-         likeStore.toggle(video.id.uuidString)
-     }
-
-    // In-grid select mode for video creation.
-
     var canMakeVideo: Bool { !likedImages.isEmpty }
-
-     func enterMakeVideo() {
-         guard canMakeVideo else { return }
-         selectedImageIds = []
-         withAnimation(.spring(duration: 0.3)) { isSelectingForVideo = true }
-     }
-
-     func cancelMakeVideo() {
-         withAnimation(.spring(duration: 0.3)) {
-             isSelectingForVideo = false
-             selectedImageIds = []
-         }
-     }
-
-     func toggleSelection(_ file: String) {
-         // Only liked images are selectable. Cap at 3.
-         guard likeStore.isLiked(file) else { return }
-         if let i = selectedImageIds.firstIndex(of: file) {
-             selectedImageIds.remove(at: i)
-         } else if selectedImageIds.count < 3 {
-             selectedImageIds.append(file)
-             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-         }
-     }
 
     /// Fire-and-forget. Adds a FemiPendingVideo immediately, kicks off the long generation
     /// in a background Task, mutates `videos` when it completes. The grid stays
     /// interactive the entire time — user can derive, like, browse, even queue more
     /// videos while the first is cooking.
-     func confirmMakeVideo() async {
-         let ids = selectedImageIds
-         let firstId = ids.first!
-         let primary = images.first(where: { $0 == firstId })!
-//
-         // Exit select mode immediately. No phase change — stay on grid.
-         isSelectingForVideo = false
-         selectedImageIds = []
-//
-         let pending = FemiPendingVideo(
-             id: UUID(),
-             sourceImageIds: ids,
-             posterFile: primary
-         )
-         withAnimation(.spring(duration: 0.3)) {
-             pendingVideos.append(pending)
-         }
-//
-         let audioFile = ProjectService.getAudio()!.lastPathComponent
-         let imagePrompts = ids.compactMap { ProjectService.getPrompt($0) }
-         let imageB64 = Self.base64(of: primary)
-         let lineRange: (start: Int, duration: Int)? = {
-             guard let lineIndex = imageLineIndex[primary],
-                   let line = audiolines?.first(where: { $0.index == lineIndex })
-             else { return nil }
-             return (line.startMs, 10_000)
-         }()
-         Task { [weak self] in
-             guard let self else { return }
-             let audioB64: String
-             if let lineRange {
-                 audioB64 = try! await Self.trimmedAudioBase64(
-                     file: audioFile, startMs: lineRange.start, durationMs: lineRange.duration
-                 )
-             } else {
-                 audioB64 = Self.base64(of: audioFile)
-             }
-             let prompt = await self.summarizePromptForVideo(imagePrompts: imagePrompts)
-             let result = await self.apiCall("video", {
-                 try await ApiHandlerAPI.apiHandler(API: Self.videoAPI(
-                     prompt: prompt, image: imageB64, audio: audioB64
-                 ))
-             })
-             if let row = result.value {
-                 let lineSubject: [String]? = {
-                     guard let idx = imageLineIndex[primary],
-                           let text = audiolines?.first(where: { $0.index == idx })?.text
-                     else { return nil }
-                     return ["\(idx)", text]
-                 }()
-                 let file = Self.saveBase64(
-                     Self.resultFile(of: row), ext: "mp4",
-                     prompt: prompt, model: Self.resultModel(of: row), subject: lineSubject
-                 )
-                 withAnimation(.spring(duration: 0.4)) {
-                     self.pendingVideos.removeAll { $0.id == pending.id }
-                     self.videos.append(FemiGeneratedVideo(
-                         id: UUID(),
-                         file: file,
-                         posterFile: primary,
-                         sourceImageIds: ids
-                     ))
-                     if let idx = self.imageLineIndex[primary] {
-                         self.videoLineIndex[file] = idx
-                     }
-                 }
-             } else {
-                 if let idx = self.pendingVideos.firstIndex(where: { $0.id == pending.id }) {
-                     self.pendingVideos[idx].state = .failed
-                 }
-                 if result.status == 402 {
-                     _ = await self.onTopupNeeded?()
-                 }
-             }
-         }
-     }
-
-    /// Discard a failed pending video.
-     func dismissFemiPendingVideo(_ id: UUID) {
-         withAnimation { pendingVideos.removeAll { $0.id == id } }
-     }
-
-    // MARK: - Upload your own image
-
-    /// Save user-supplied bytes directly to the project folder and add them to
-    /// the grid. No server roundtrip — the upload route is gone from the API,
-    /// so user-uploaded images live locally only.
-     func handlePhotoPick(_ data: Data) {
-         let name = "upload-\(UUID().uuidString).jpg"
-         ProjectService.saveFile(data, named: name, prompt: nil, model: nil, subject: nil)
-         withAnimation(.spring(duration: 0.4)) {
-             self.images.append(name)
-         }
-     }
-
-     func dismissFemiPendingImage(_ id: UUID) {
-         withAnimation { pendingImages.removeAll { $0.id == id } }
-     }
-
     // Credit / topup gate
 
     /// Minimum wallet balance required before generate/video; at or below → topup.
 
     /// Pre-flight credit check. Called on every user action (generate /
-    /// derive / video / upload). Fetches balance synchronously if we don't
-    /// have it yet, then either fires topup (and returns false) or returns
-    /// true to let the action proceed. The actual generate call only runs
-    /// when this returns true — no fire-then-topup.
-
-    /// THE wrapper. Every server call goes through this. Returns
-    /// `(value, status)`. Logs status + body preview on failure. Has zero UI
-    /// side effects — caller inspects `status` and decides (e.g. user-action
-    /// paths fire `onTopupNeeded` on 402; bg paths ignore).
-    /// `status`: HTTP code, `0` on transport/decode failure, `200` on success.
-    @MainActor
-     func apiCall<T: Sendable>(_ label: String, _ work: @Sendable () async throws -> T) async -> (value: T?, status: Int) {
-         do {
-             let v = try await work()
-             return (v, 200)
-         } catch let err as ErrorResponse {
-             if case let .error(code, data, _, underlying) = err {
-                 let preview = data.flatMap { String(data: $0, encoding: .utf8) }.map { String($0.prefix(400)) } ?? "<no body>"
-                 print("← \(label) FAIL status=\(code) body=\(preview) underlying=\(underlying)")
-                 return (nil, code)
-             }
-             return (nil, 0)
-         } catch {
-             print("← \(label) FAIL error=\(error)")
-             return (nil, 0)
-         }
-     }
-
-     // refreshPricing removed
-
     /// Decode the base64 returned by the API and persist to the project folder
     /// under a fresh local filename. `ext` is sniffed from the bytes via ImageIO
     /// when not supplied (video callers pass `"mp4"` since ImageIO doesn't
     /// cover video). Returns the new filename for grid wiring.
     fileprivate static func saveBase64(_ b64: String, ext: String? = nil, prompt: String? = nil, model: String? = nil, subject: [String]? = nil) -> String {
         let data = Data(base64Encoded: b64)!
-        let finalExt = ext ?? detectImageExt(data)
+        let finalExt: String
+        if let ext {
+            finalExt = ext
+        } else {
+            guard let src = CGImageSourceCreateWithData(data as CFData, nil),
+                  let uti = CGImageSourceGetType(src) as? String,
+                  let sniffed = UTType(uti)?.preferredFilenameExtension
+            else { preconditionFailure("saveBase64: response bytes aren't a recognized image format") }
+            finalExt = sniffed
+        }
         let name = "gen-\(UUID().uuidString).\(finalExt)"
         ProjectService.saveFile(data, named: name, prompt: prompt, model: model, subject: subject)
         return name
-    }
-
-    private static func detectImageExt(_ data: Data) -> String {
-        guard let src = CGImageSourceCreateWithData(data as CFData, nil),
-              let uti = CGImageSourceGetType(src) as? String,
-              let ext = UTType(uti)?.preferredFilenameExtension
-        else { preconditionFailure("detectImageExt: response bytes aren't a recognized image format") }
-        return ext
     }
 
     /// Read a project file from disk and return its raw base64 — the API
@@ -839,44 +430,6 @@ final class FemiGenerateViewModel {
         return (try! Data(contentsOf: url)).base64EncodedString()
     }
 
-    /// Trim `file` to [startMs, startMs+durationMs] via AVAssetExportSession,
-    /// return the trimmed bytes as base64. Used by the video pipeline when the
-    /// source image is tied to a lyric line.
-    fileprivate static func trimmedAudioBase64(file: String, startMs: Int, durationMs: Int) async throws -> String {
-        let inURL = ProjectService.getUrl(for: file)
-        let outURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("\(UUID().uuidString).m4a")
-        let asset = AVURLAsset(url: inURL)
-        let exporter = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetAppleM4A)!
-        exporter.outputURL = outURL
-        exporter.outputFileType = .m4a
-        exporter.timeRange = CMTimeRange(
-            start: CMTime(value: Int64(startMs), timescale: 1000),
-            duration: CMTime(value: Int64(durationMs), timescale: 1000)
-        )
-        try await exporter.export(to: outURL, as: .m4a)
-        defer { try? FileManager.default.removeItem(at: outURL) }
-        return try Data(contentsOf: outURL).base64EncodedString()
-    }
-
-    /// Ask Claude to distill the per-image xmp prompts into a timestamped
-    /// music-video prompt the Ltx23A2V model can use directly.
-    func summarizePromptForVideo(imagePrompts: [String]) async -> String {
-        let joined = imagePrompts.joined(separator: "\n---\n")
-        let instruction = "Convert these image prompts into a timestamped music-video prompt. Under 50 words.\n\n\(joined)"
-        let claudeAPI = Self.wrap(.typeClaudeSonnet46(ClaudeSonnet46(
-            messages: [ApiChatMessage(content: instruction, role: .user)],
-            type: .claudesonnet46
-        )))
-        let result = await apiCall("claude-prompt", {
-            try await ApiHandlerAPI.apiHandler(API: claudeAPI)
-        })
-        guard let row = result.value,
-              case .typeClaudeSonnet46(let c) = row.action,
-              let reply = c.messages.last?.content
-        else { preconditionFailure("summarizePromptForVideo: Claude response missing — \(String(describing: result))") }
-        return reply
-    }
 }
 
 // MARK: - Video detail playback (full screen, sound on)
@@ -917,29 +470,24 @@ private struct VideoDetailView: View {
                 Spacer()
             }
         }
-        .task { setupPlayback() }
-        .onDisappear { teardownPlayback() }
+        .task {
+            try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+            try? AVAudioSession.sharedInstance().setActive(true)
+            let asset = AVURLAsset(url: ProjectService.getUrl(for: video.file))
+            let item = AVPlayerItem(asset: asset)
+            let p = AVPlayer(playerItem: item)
+            p.isMuted = false
+            self.player = p
+            p.play()
+        }
+        .onDisappear {
+            player?.pause()
+            player = nil
+            try? AVAudioSession.sharedInstance().setCategory(
+                .ambient, mode: .default, options: [.mixWithOthers]
+            )
+        }
     }
-
-     private func setupPlayback() {
-         let url = ProjectService.getUrl(for: video.file)
-         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
-         try? AVAudioSession.sharedInstance().setActive(true)
-         let asset = AVURLAsset(url: url)
-         let item = AVPlayerItem(asset: asset)
-         let p = AVPlayer(playerItem: item)
-         p.isMuted = false
-         self.player = p
-         p.play()
-     }
-
-     private func teardownPlayback() {
-         player?.pause()
-         player = nil
-         try? AVAudioSession.sharedInstance().setCategory(
-             .ambient, mode: .default, options: [.mixWithOthers]
-         )
-     }
 }
 
 // MARK: - Credit chip
@@ -998,14 +546,79 @@ struct Generate: View {
         .task {
             viewModel.onTopupNeeded = onTopupNeeded
             viewModel.onImageTapped = onImageTapped
-            await viewModel.bootstrap()
-            // Derive mode: parent pushed us with a pending action — run it
-            // once the bootstrap has settled so pricing / project are ready.
+            let existingImages = Set(viewModel.images)
+            let existingVideos = Set(viewModel.videos.map(\.file))
+            for url in ProjectService.getAllGenerations() {
+                let filename = url.lastPathComponent
+                let ext = url.pathExtension.lowercased()
+                switch ext {
+                case "png", "jpg", "jpeg", "webp", "gif", "heic", "heif":
+                    if !existingImages.contains(filename) { viewModel.images.append(filename) }
+                case "mp4":
+                    if !existingVideos.contains(filename) {
+                        viewModel.videos.append(FemiGeneratedVideo(
+                            id: UUID(), file: filename, posterFile: "", sourceImageIds: []
+                        ))
+                        if let subject = ProjectService.getSubject(filename),
+                           let first = subject.first, let idx = Int(first) {
+                            viewModel.videoLineIndex[filename] = idx
+                        }
+                    }
+                default: break
+                }
+            }
+            for image in viewModel.images where ProjectService.getLike(image) {
+                viewModel.likeStore.setLiked(image, true)
+            }
+            if let song = ProjectService.getAudio()?.lastPathComponent {
+                viewModel.extractAudiolines(filename: song)
+            }
             if let pendingAction {
-                await viewModel.runDerive(
-                    text: pendingAction.tweak,
-                    filename: pendingAction.filename
-                )
+                let text = pendingAction.tweak
+                let filename = pendingAction.filename
+                let sourceLine = viewModel.imageLineIndex[filename]
+                let pendings = (0..<3).map { _ in
+                    FemiPendingGeneration(id: UUID(), lineIndex: sourceLine)
+                }
+                var queue = pendings.map(\.id)
+                withAnimation(.spring(duration: 0.35)) {
+                    viewModel.pendingGenerations.append(contentsOf: pendings)
+                }
+                var topupNeeded = false
+                await withTaskGroup(of: Result<API, Error>.self) { group in
+                    for api in FemiGenerateViewModel.textToImageAPIs(prompt: text) {
+                        group.addTask {
+                            do { return .success(try await ApiHandlerAPI.apiHandler(API: api)) }
+                            catch { return .failure(error) }
+                        }
+                    }
+                    for await result in group {
+                        switch result {
+                        case .success(let row):
+                            let subject = sourceLine.map { ["line:\($0)"] }
+                            let file = FemiGenerateViewModel.saveBase64(FemiGenerateViewModel.resultFile(of: row), prompt: text, model: FemiGenerateViewModel.resultModel(of: row), subject: subject)
+                            guard !queue.isEmpty else { continue }
+                            let pid = queue.removeFirst()
+                            withAnimation(.spring(duration: 0.35)) {
+                                viewModel.pendingGenerations.removeAll { $0.id == pid }
+                                viewModel.images.append(file)
+                                if let sourceLine { viewModel.imageLineIndex[file] = sourceLine }
+                            }
+                        case .failure(let error):
+                            if case ErrorResponse.error(402, _, _, _) = error {
+                                topupNeeded = true
+                            } else {
+                                print("← derive FAIL: \(error)")
+                            }
+                        }
+                    }
+                }
+                if topupNeeded { _ = await viewModel.onTopupNeeded?() }
+                for pid in queue {
+                    if let i = viewModel.pendingGenerations.firstIndex(where: { $0.id == pid }) {
+                        viewModel.pendingGenerations[i].state = .failed
+                    }
+                }
             }
         }
         .photosPicker(isPresented: $showingPhotoPicker,
@@ -1016,7 +629,11 @@ struct Generate: View {
             guard let newValue else { return }
             Task {
                 if let data = try? await newValue.loadTransferable(type: Data.self) {
-                    viewModel.handlePhotoPick(data)
+                    let name = "upload-\(UUID().uuidString).jpg"
+                    ProjectService.saveFile(data, named: name, prompt: nil, model: nil, subject: nil)
+                    withAnimation(.spring(duration: 0.4)) {
+                        viewModel.images.append(name)
+                    }
                 }
                 photoPickerItem = nil
             }
@@ -1051,8 +668,13 @@ struct Generate: View {
     private var toolbar: some ToolbarContent {
         if viewModel.isSelectingForVideo {
             ToolbarItem(placement: .topBarLeading) {
-                Button("Cancel", action: viewModel.cancelMakeVideo)
-                    .foregroundStyle(FemiTheme.onSurface)
+                Button("Cancel") {
+                    withAnimation(.spring(duration: 0.3)) {
+                        viewModel.isSelectingForVideo = false
+                        viewModel.selectedImageIds = []
+                    }
+                }
+                .foregroundStyle(FemiTheme.onSurface)
             }
             ToolbarItem(placement: .principal) {
                 Text("\(viewModel.selectedImageIds.count) of 3 picked")
@@ -1065,7 +687,50 @@ struct Generate: View {
                 if shouldShowUploadButton {
                     Menu {
                         Button {
-                            Task { await viewModel.generate() }
+                            Task {
+                                let pendings = (0..<3).map { _ in
+                                    FemiPendingGeneration(id: UUID(), lineIndex: nil)
+                                }
+                                var queue = pendings.map(\.id)
+                                withAnimation(.spring(duration: 0.4)) {
+                                    viewModel.pendingGenerations.append(contentsOf: pendings)
+                                    viewModel.phase = .grid
+                                }
+                                let prompt = "cinematic music video still, vivid color grade, dramatic lighting, expressive performer mid-motion, shallow depth of field, 35mm film grain, emotional and atmospheric"
+                                var topupNeeded = false
+                                await withTaskGroup(of: Result<API, Error>.self) { group in
+                                    for api in FemiGenerateViewModel.textToImageAPIs(prompt: prompt) {
+                                        group.addTask {
+                                            do { return .success(try await ApiHandlerAPI.apiHandler(API: api)) }
+                                            catch { return .failure(error) }
+                                        }
+                                    }
+                                    for await result in group {
+                                        switch result {
+                                        case .success(let row):
+                                            let file = FemiGenerateViewModel.saveBase64(FemiGenerateViewModel.resultFile(of: row), model: FemiGenerateViewModel.resultModel(of: row))
+                                            guard !queue.isEmpty else { continue }
+                                            let pid = queue.removeFirst()
+                                            withAnimation(.spring(duration: 0.35)) {
+                                                viewModel.pendingGenerations.removeAll { $0.id == pid }
+                                                viewModel.images.append(file)
+                                            }
+                                        case .failure(let error):
+                                            if case ErrorResponse.error(402, _, _, _) = error {
+                                                topupNeeded = true
+                                            } else {
+                                                print("← generate FAIL: \(error)")
+                                            }
+                                        }
+                                    }
+                                }
+                                if topupNeeded { _ = await viewModel.onTopupNeeded?() }
+                                for pid in queue {
+                                    if let i = viewModel.pendingGenerations.firstIndex(where: { $0.id == pid }) {
+                                        viewModel.pendingGenerations[i].state = .failed
+                                    }
+                                }
+                            }
                         } label: {
                             Label("Generate", systemImage: "sparkles")
                         }
@@ -1087,7 +752,11 @@ struct Generate: View {
                 Button {
                     Task {
                         await onUploadSong()
-                        viewModel.refreshFromAudio()
+                        viewModel.lyrics = nil
+                        viewModel.audiolines = nil
+                        if let file = ProjectService.getAudio()?.lastPathComponent {
+                            viewModel.extractAudiolines(filename: file)
+                        }
                     }
                 } label: {
                     HStack(spacing: 6) {
@@ -1110,7 +779,11 @@ struct Generate: View {
             }
             ToolbarItem(placement: .topBarTrailing) {
                 if shouldShowMakeVideoButton {
-                    Button(action: viewModel.enterMakeVideo) {
+                    Button {
+                        guard viewModel.canMakeVideo else { return }
+                        viewModel.selectedImageIds = []
+                        withAnimation(.spring(duration: 0.3)) { viewModel.isSelectingForVideo = true }
+                    } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "film.fill")
                             Text("Make Video")
@@ -1226,7 +899,118 @@ private struct FemiMakeVideoShelf: View {
 
     var body: some View {
         Button("Make video") {
-            Task { await viewModel.confirmMakeVideo() }
+            Task {
+                let ids = viewModel.selectedImageIds
+                let firstId = ids.first!
+                let primary = viewModel.images.first(where: { $0 == firstId })!
+                viewModel.isSelectingForVideo = false
+                viewModel.selectedImageIds = []
+                let pending = FemiPendingVideo(
+                    id: UUID(), sourceImageIds: ids, posterFile: primary
+                )
+                withAnimation(.spring(duration: 0.3)) {
+                    viewModel.pendingVideos.append(pending)
+                }
+                let audioFile = ProjectService.getAudio()!.lastPathComponent
+                let imagePrompts = ids.compactMap { ProjectService.getPrompt($0) }
+                let imageB64 = FemiGenerateViewModel.base64(of: primary)
+                let lineRange: (start: Int, duration: Int)? = {
+                    guard let lineIndex = viewModel.imageLineIndex[primary],
+                          let line = viewModel.audiolines?.first(where: { $0.index == lineIndex })
+                    else { return nil }
+                    return (line.startMs, 10_000)
+                }()
+                let audioB64: String
+                if let lineRange {
+                    let inURL = ProjectService.getUrl(for: audioFile)
+                    let outURL = FileManager.default.temporaryDirectory
+                        .appendingPathComponent("\(UUID().uuidString).m4a")
+                    let asset = AVURLAsset(url: inURL)
+                    let exporter = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetAppleM4A)!
+                    exporter.outputURL = outURL
+                    exporter.outputFileType = .m4a
+                    exporter.timeRange = CMTimeRange(
+                        start: CMTime(value: Int64(lineRange.start), timescale: 1000),
+                        duration: CMTime(value: Int64(lineRange.duration), timescale: 1000)
+                    )
+                    try! await exporter.export(to: outURL, as: .m4a)
+                    defer { try? FileManager.default.removeItem(at: outURL) }
+                    audioB64 = try! Data(contentsOf: outURL).base64EncodedString()
+                } else {
+                    audioB64 = FemiGenerateViewModel.base64(of: audioFile)
+                }
+                let instruction = "Convert these \(imagePrompts.count) image prompts into a timestamped music-video prompt with exactly \(imagePrompts.count) timestamps. Under 100 words.\n\n\(imagePrompts.joined(separator: "\n---\n"))"
+                let prompt: String
+                print("→ claude call: instruction=\(instruction)")
+                do {
+                    let claudeRow = try await ApiHandlerAPI.apiHandler(API: FemiGenerateViewModel.wrap(.typeClaudeSonnet46(ClaudeSonnet46(
+                        messages: [ApiChatMessage(content: instruction, role: .user)],
+                        type: .claudesonnet46
+                    ))))
+                    guard case .typeClaudeSonnet46(let claudeAction) = claudeRow.action,
+                          let reply = claudeAction.messages.last?.content
+                    else {
+                        print("← claude FAIL: unexpected action shape \(claudeRow.action)")
+                        if let idx = viewModel.pendingVideos.firstIndex(where: { $0.id == pending.id }) {
+                            viewModel.pendingVideos[idx].state = .failed
+                        }
+                        return
+                    }
+                    print("← claude OK: reply=\(reply)")
+                    prompt = reply
+                } catch ErrorResponse.error(402, _, _, _) {
+                    print("← claude FAIL: 402 payment required")
+                    if let idx = viewModel.pendingVideos.firstIndex(where: { $0.id == pending.id }) {
+                        viewModel.pendingVideos[idx].state = .failed
+                    }
+                    _ = await viewModel.onTopupNeeded?()
+                    return
+                } catch {
+                    print("← claude FAIL: \(error)")
+                    if let idx = viewModel.pendingVideos.firstIndex(where: { $0.id == pending.id }) {
+                        viewModel.pendingVideos[idx].state = .failed
+                    }
+                    return
+                }
+                print("→ video call: prompt=\(prompt) audioBytes=\(audioB64.count) imageBytes=\(imageB64.count)")
+                do {
+                    let row = try await ApiHandlerAPI.apiHandler(API: FemiGenerateViewModel.wrap(.typeLtx23A2V(Ltx23A2V(
+                        audio: audioB64, comfyRequestId: "", file: "", image: imageB64,
+                        prompt: prompt, type: .ltx23a2v
+                    ))))
+                    print("← video OK: model=\(FemiGenerateViewModel.resultModel(of: row)) bytes=\(FemiGenerateViewModel.resultFile(of: row).count)")
+                    let lineSubject: [String]? = {
+                        guard let idx = viewModel.imageLineIndex[primary],
+                              let text = viewModel.audiolines?.first(where: { $0.index == idx })?.text
+                        else { return nil }
+                        return ["\(idx)", text]
+                    }()
+                    let file = FemiGenerateViewModel.saveBase64(
+                        FemiGenerateViewModel.resultFile(of: row), ext: "mp4",
+                        prompt: prompt, model: FemiGenerateViewModel.resultModel(of: row), subject: lineSubject
+                    )
+                    withAnimation(.spring(duration: 0.4)) {
+                        viewModel.pendingVideos.removeAll { $0.id == pending.id }
+                        viewModel.videos.append(FemiGeneratedVideo(
+                            id: UUID(), file: file, posterFile: primary, sourceImageIds: ids
+                        ))
+                        if let idx = viewModel.imageLineIndex[primary] {
+                            viewModel.videoLineIndex[file] = idx
+                        }
+                    }
+                } catch ErrorResponse.error(402, _, _, _) {
+                    print("← video FAIL: 402 payment required")
+                    if let idx = viewModel.pendingVideos.firstIndex(where: { $0.id == pending.id }) {
+                        viewModel.pendingVideos[idx].state = .failed
+                    }
+                    _ = await viewModel.onTopupNeeded?()
+                } catch {
+                    print("← video FAIL: \(error)")
+                    if let idx = viewModel.pendingVideos.firstIndex(where: { $0.id == pending.id }) {
+                        viewModel.pendingVideos[idx].state = .failed
+                    }
+                }
+            }
         }
         .buttonStyle(FemiAccentButtonStyle())
         .disabled(viewModel.selectedImageIds.isEmpty)
@@ -1293,7 +1077,114 @@ private struct GridView: View {
             if hasNoContent {
                 emptyState
             } else if shouldSection, let audiolines = viewModel.audiolines {
-                sectionedScroll(audiolines: audiolines)
+                ScrollView {
+                    LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                        if !visibleFemiPendingImages.isEmpty || !visibleFemiPendingVideos.isEmpty {
+                            LazyVGrid(columns: columns, spacing: 2) {
+                                ForEach(visibleFemiPendingImages) { PendingImageCell(pending: $0, viewModel: viewModel) }
+                                ForEach(visibleFemiPendingVideos) { PendingVideoCell(pending: $0, viewModel: viewModel) }
+                            }
+                            .padding(.horizontal, 2)
+                            .padding(.top, 6)
+                        }
+                        ForEach(audiolines) { line in
+                            let imagesForLine = viewModel.filteredImages.filter { viewModel.imageLineIndex[$0] == line.index }
+                            let pendingsForLine = visibleFemiPendingGenerations.filter { $0.lineIndex == line.index }
+                            let videosForLine = visibleVideos.filter { viewModel.videoLineIndex[$0.file] == line.index }
+                            let count = imagesForLine.count + pendingsForLine.count + videosForLine.count
+                            Section {
+                                if !pendingsForLine.isEmpty || !imagesForLine.isEmpty || !videosForLine.isEmpty {
+                                    LazyVGrid(columns: columns, spacing: 2) {
+                                        ForEach(pendingsForLine) { PendingGenerationCell(pending: $0, viewModel: viewModel) }
+                                        ForEach(imagesForLine, id: \.self) { FemiImageCell(image: $0, viewModel: viewModel) }
+                                        ForEach(videosForLine) { VideoCell(video: $0, viewModel: viewModel) }
+                                    }
+                                    .padding(.horizontal, 2)
+                                    .padding(.top, 4)
+                                }
+                            } header: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(line.text)
+                                        .font(.title2.weight(.bold))
+                                        .foregroundStyle(FemiTheme.onSurface)
+                                        .lineLimit(2)
+                                        .multilineTextAlignment(.leading)
+                                    Text(count == 0 ? "No pictures yet"
+                                                    : "\(count) \(count == 1 ? "picture" : "pictures")")
+                                        .font(.subheadline)
+                                        .foregroundStyle(FemiTheme.muted)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 16)
+                                .padding(.top, 28)
+                                .padding(.bottom, 10)
+                                .background(FemiTheme.background)
+                                .contextMenu {
+                                    Button {
+                                        Task {
+                                            let lineIndex = line.index
+                                            guard let lyricLine = viewModel.audiolines?.first(where: { $0.index == lineIndex }) else { return }
+                                            let prompt = lyricLine.text
+                                            let pendings = (0..<3).map { _ in
+                                                FemiPendingGeneration(id: UUID(), lineIndex: lineIndex)
+                                            }
+                                            var queue = pendings.map(\.id)
+                                            withAnimation(.spring(duration: 0.3)) {
+                                                viewModel.pendingGenerations.append(contentsOf: pendings)
+                                            }
+                                            var topupNeeded = false
+                                            await withTaskGroup(of: Result<API, Error>.self) { group in
+                                                for api in FemiGenerateViewModel.textToImageAPIs(prompt: prompt) {
+                                                    group.addTask {
+                                                        do { return .success(try await ApiHandlerAPI.apiHandler(API: api)) }
+                                                        catch { return .failure(error) }
+                                                    }
+                                                }
+                                                for await result in group {
+                                                    switch result {
+                                                    case .success(let row):
+                                                        let file = FemiGenerateViewModel.saveBase64(FemiGenerateViewModel.resultFile(of: row), prompt: prompt, model: FemiGenerateViewModel.resultModel(of: row), subject: ["line:\(lineIndex)"])
+                                                        guard !queue.isEmpty else { continue }
+                                                        let pid = queue.removeFirst()
+                                                        withAnimation(.spring(duration: 0.35)) {
+                                                            viewModel.pendingGenerations.removeAll { $0.id == pid }
+                                                            viewModel.images.append(file)
+                                                            viewModel.imageLineIndex[file] = lineIndex
+                                                        }
+                                                    case .failure(let error):
+                                                        if case ErrorResponse.error(402, _, _, _) = error {
+                                                            topupNeeded = true
+                                                        } else {
+                                                            print("← fillLine FAIL: \(error)")
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            if topupNeeded { _ = await viewModel.onTopupNeeded?() }
+                                            for pid in queue {
+                                                if let i = viewModel.pendingGenerations.firstIndex(where: { $0.id == pid }) {
+                                                    viewModel.pendingGenerations[i].state = .failed
+                                                }
+                                            }
+                                        }
+                                    } label: {
+                                        Label("Make pictures for this line", systemImage: "sparkles")
+                                    }
+                                }
+                                .accessibilityLabel(line.text)
+                            }
+                        }
+                        let orphanVideos = visibleVideos.filter { viewModel.videoLineIndex[$0.file] == nil }
+                        if !orphanVideos.isEmpty {
+                            LazyVGrid(columns: columns, spacing: 2) {
+                                ForEach(orphanVideos) { VideoCell(video: $0, viewModel: viewModel) }
+                            }
+                            .padding(.horizontal, 2)
+                            .padding(.top, 12)
+                        }
+                    }
+                }
+                .contentMargins(.bottom, bottomChromeMargin, for: .scrollContent)
             } else {
                 flatScroll
             }
@@ -1318,91 +1209,6 @@ private struct GridView: View {
         }
         .contentMargins(.bottom, bottomChromeMargin, for: .scrollContent)
     }
-
-    // MARK: - Sectioned scroll (post-lyrics, All filter)
-
-    /// Photos-style sectioned grid. Each lyric line is a `Section` with a
-    /// pinned header that sticks to the top of the viewport as you scroll —
-    /// matches the Photos.app pattern. Empty lines render as the header
-    /// alone (no body), keeping the song's structure visible without noise.
-    @ViewBuilder
-     private func sectionedScroll(audiolines: [FemiSongLine]) -> some View {
-         ScrollView {
-             LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
-                 if !visibleFemiPendingImages.isEmpty || !visibleFemiPendingVideos.isEmpty {
-                     LazyVGrid(columns: columns, spacing: 2) {
-                         ForEach(visibleFemiPendingImages) { PendingImageCell(pending: $0, viewModel: viewModel) }
-                         ForEach(visibleFemiPendingVideos) { PendingVideoCell(pending: $0, viewModel: viewModel) }
-                     }
-                     .padding(.horizontal, 2)
-                     .padding(.top, 6)
-                 }
-//
-                 ForEach(audiolines) { line in
-                     let imagesForLine = viewModel.filteredImages.filter { viewModel.imageLineIndex[$0] == line.index }
-                     let pendingsForLine = visibleFemiPendingGenerations.filter { $0.lineIndex == line.index }
-                     let videosForLine = visibleVideos.filter { viewModel.videoLineIndex[$0.file] == line.index }
-                     Section {
-                         if !pendingsForLine.isEmpty || !imagesForLine.isEmpty || !videosForLine.isEmpty {
-                             LazyVGrid(columns: columns, spacing: 2) {
-                                 ForEach(pendingsForLine) { PendingGenerationCell(pending: $0, viewModel: viewModel) }
-                                 ForEach(imagesForLine, id: \.self) { FemiImageCell(image: $0, viewModel: viewModel) }
-                                 ForEach(videosForLine) { VideoCell(video: $0, viewModel: viewModel) }
-                             }
-                             .padding(.horizontal, 2)
-                             .padding(.top, 4)
-                         }
-                     } header: {
-                         sectionHeader(
-                             line: line,
-                             imageCount: imagesForLine.count + pendingsForLine.count + videosForLine.count
-                         )
-                     }
-                 }
-                 let orphanVideos = visibleVideos.filter { viewModel.videoLineIndex[$0.file] == nil }
-                 if !orphanVideos.isEmpty {
-                     LazyVGrid(columns: columns, spacing: 2) {
-                         ForEach(orphanVideos) { VideoCell(video: $0, viewModel: viewModel) }
-                     }
-                     .padding(.horizontal, 2)
-                     .padding(.top, 12)
-                 }
-             }
-         }
-         .contentMargins(.bottom, bottomChromeMargin, for: .scrollContent)
-     }
-
-    /// Photos-style section header: bold display title + small caption
-    /// underneath, opaque background so the pinned state reads cleanly.
-    /// Native power-user discovery via `.contextMenu` (long-press surfaces
-    /// the action with iOS's own animation + haptic).
-    @ViewBuilder
-     private func sectionHeader(line: FemiSongLine, imageCount: Int) -> some View {
-         VStack(alignment: .leading, spacing: 2) {
-             Text(line.text)
-                 .font(.title2.weight(.bold))
-                 .foregroundStyle(FemiTheme.onSurface)
-                 .lineLimit(2)
-                 .multilineTextAlignment(.leading)
-             Text(imageCount == 0 ? "No pictures yet"
-                                 : "\(imageCount) \(imageCount == 1 ? "picture" : "pictures")")
-                 .font(.subheadline)
-                 .foregroundStyle(FemiTheme.muted)
-         }
-         .frame(maxWidth: .infinity, alignment: .leading)
-         .padding(.horizontal, 16)
-         .padding(.top, 28)
-         .padding(.bottom, 10)
-         .background(FemiTheme.background)
-         .contextMenu {
-             Button {
-                 Task { await viewModel.fillLine(line.index) }
-             } label: {
-                 Label("Make pictures for this line", systemImage: "sparkles")
-             }
-         }
-         .accessibilityLabel(line.text)
-     }
 
     // MARK: - Empty state (C6)
 
@@ -1481,29 +1287,6 @@ private struct GridView: View {
     // and produce subtle differences across cells.
 
 
-    /// Photos-style numbered selection badge. Empty circle when eligible-but-not-picked,
-    /// magenta filled circle with the pick order when selected.
-    @ViewBuilder
-     private func selectionBadge(order: Int?) -> some View {
-         ZStack {
-             if let order {
-                 Text("\(order + 1)")
-                     .font(.caption.bold())
-                     .foregroundStyle(.white)
-                     .frame(width: 26, height: 26)
-                     .background(FemiTheme.accent, in: .circle)
-                     .overlay(Circle().stroke(.white, lineWidth: 1.5))
-             } else {
-                 Circle()
-                     .stroke(.white.opacity(0.9), lineWidth: 1.5)
-                     .background(Circle().fill(.black.opacity(0.25)))
-                     .frame(width: 26, height: 26)
-             }
-         }
-         .shadow(color: .black.opacity(0.35), radius: 4, y: 1)
-         .padding(8)
-     }
-
 }
 
 // MARK: - Completion
@@ -1543,23 +1326,4 @@ private struct CompletionView: View {
     }
 }
 
-
-// MARK: - JWT
-
- private func jwtSub() -> String? {
-     guard let token = UserDefaults.standard.string(forKey: "idToken") else { return nil }
-     let parts = token.split(separator: ".")
-     guard parts.count >= 2 else { return nil }
-     var payload = String(parts[1])
-         .replacingOccurrences(of: "-", with: "+")
-         .replacingOccurrences(of: "_", with: "/")
-     let pad = (4 - payload.count % 4) % 4
-     payload.append(String(repeating: "=", count: pad))
-     guard
-         let data = Data(base64Encoded: payload),
-         let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-         let sub = json["sub"] as? String
-     else { return nil }
-     return sub
- }
 
