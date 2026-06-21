@@ -156,6 +156,17 @@ struct FemiPendingVideo: Identifiable, Hashable, Sendable {
     var state: State = .working
 }
 
+/// Drag payload for moving an image between lyric line sections. The
+/// `Transferable` conformance + Codable encoding means external (e.g. Photos)
+/// drags don't decode to this type and are silently rejected by the drop
+/// destination's type filter.
+struct DraggedImage: Codable, Transferable {
+    let filename: String
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .data)
+    }
+}
+
 /// An image being uploaded from the user's photo library. Mirrors FemiPendingVideo —
 /// the grid shows a shimmer cell while the upload happens in the background.
 struct FemiPendingImage: Identifiable, Hashable, Sendable {
@@ -492,14 +503,20 @@ struct Generate: View {
                 let ext = url.pathExtension.lowercased()
                 switch ext {
                 case "png", "jpg", "jpeg", "webp", "gif", "heic", "heif":
-                    if !existingImages.contains(filename) { viewModel.images.append(filename) }
+                    if !existingImages.contains(filename) {
+                        viewModel.images.append(filename)
+                        if let subject = ProjectService.getSubject(filename),
+                           let idx = subject.compactMap(Int.init).first {
+                            viewModel.imageLineIndex[filename] = idx
+                        }
+                    }
                 case "mp4":
                     if !existingVideos.contains(filename) {
                         viewModel.videos.append(FemiGeneratedVideo(
                             id: UUID(), file: filename, posterFile: "", sourceImageIds: []
                         ))
                         if let subject = ProjectService.getSubject(filename),
-                           let first = subject.first, let idx = Int(first) {
+                           let idx = subject.compactMap(Int.init).first {
                             viewModel.videoLineIndex[filename] = idx
                         }
                     }
@@ -994,6 +1011,23 @@ private struct GridView: View {
                                     }
                                     .padding(.horizontal, 2)
                                     .padding(.top, 4)
+                                    .dropDestination(for: DraggedImage.self) { items, _ in
+                                        withAnimation(.spring(duration: 0.25)) {
+                                            for item in items {
+                                                viewModel.imageLineIndex[item.filename] = line.index
+                                                if let data = try? Data(contentsOf: ProjectService.getUrl(for: item.filename)) {
+                                                    ProjectService.saveFile(
+                                                        data,
+                                                        named: item.filename,
+                                                        prompt: ProjectService.getPrompt(item.filename),
+                                                        model: ProjectService.getModel(item.filename),
+                                                        subject: ["\(line.index)", line.text]
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        return !items.isEmpty
+                                    }
                                 }
                             } header: {
                                 VStack(alignment: .leading, spacing: 2) {
@@ -1012,6 +1046,23 @@ private struct GridView: View {
                                 .padding(.top, 28)
                                 .padding(.bottom, 10)
                                 .background(FemiTheme.background)
+                                .dropDestination(for: DraggedImage.self) { items, _ in
+                                    withAnimation(.spring(duration: 0.25)) {
+                                        for item in items {
+                                            viewModel.imageLineIndex[item.filename] = line.index
+                                            if let data = try? Data(contentsOf: ProjectService.getUrl(for: item.filename)) {
+                                                ProjectService.saveFile(
+                                                    data,
+                                                    named: item.filename,
+                                                    prompt: ProjectService.getPrompt(item.filename),
+                                                    model: ProjectService.getModel(item.filename),
+                                                    subject: ["\(line.index)", line.text]
+                                                )
+                                            }
+                                        }
+                                    }
+                                    return !items.isEmpty
+                                }
                                 .contextMenu {
                                     Button {
                                         Task {
