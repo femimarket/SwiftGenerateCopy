@@ -7,9 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		146628862FF1366A00EBAFCE /* Api in Frameworks */ = {isa = PBXBuildFile; productRef = 146628852FF1366A00EBAFCE /* Api */; };
 		148B8A112FE745DD00AF8260 /* ProjectService in Frameworks */ = {isa = PBXBuildFile; productRef = 148B8A102FE745DD00AF8260 /* ProjectService */; };
 		14D8A13D2FDE19F8006F3D15 /* AudioMarker in Frameworks */ = {isa = PBXBuildFile; productRef = 14D8A13C2FDE19F8006F3D15 /* AudioMarker */; };
-		14D998952FE586E9002C5CF6 /* Api in Frameworks */ = {isa = PBXBuildFile; productRef = 14D998942FE586E9002C5CF6 /* Api */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -163,7 +163,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				14D998952FE586E9002C5CF6 /* Api in Frameworks */,
+				146628862FF1366A00EBAFCE /* Api in Frameworks */,
 				148B8A112FE745DD00AF8260 /* ProjectService in Frameworks */,
 				14D8A13D2FDE19F8006F3D15 /* AudioMarker in Frameworks */,
 			);
@@ -253,8 +253,8 @@
 			name = Generate2;
 			packageProductDependencies = (
 				14D8A13C2FDE19F8006F3D15 /* AudioMarker */,
-				14D998942FE586E9002C5CF6 /* Api */,
 				148B8A102FE745DD00AF8260 /* ProjectService */,
+				146628852FF1366A00EBAFCE /* Api */,
 			);
 			productName = Generate2;
 			productReference = 14073E922FDDBBDF00EE9C5D /* Generate2.app */;
@@ -377,8 +377,8 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				14D8A13B2FDE19F8006F3D15 /* XCRemoteSwiftPackageReference "swift-audio-marker" */,
-				14D998932FE586E9002C5CF6 /* XCRemoteSwiftPackageReference "swiftapi" */,
 				148B8A0F2FE745DD00AF8260 /* XCRemoteSwiftPackageReference "swift-project-service" */,
+				146628842FF1366A00EBAFCE /* XCRemoteSwiftPackageReference "swiftapi" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 144973A92FCC2863001424BC /* Products */;
@@ -974,6 +974,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		146628842FF1366A00EBAFCE /* XCRemoteSwiftPackageReference "swiftapi" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/femimarket/swiftapi";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
 		148B8A0F2FE745DD00AF8260 /* XCRemoteSwiftPackageReference "swift-project-service" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/femimarket/swift-project-service";
@@ -990,17 +998,14 @@
 				minimumVersion = 0.1.1;
 			};
 		};
-		14D998932FE586E9002C5CF6 /* XCRemoteSwiftPackageReference "swiftapi" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/femimarket/swiftapi";
-			requirement = {
-				branch = main;
-				kind = branch;
-			};
-		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		146628852FF1366A00EBAFCE /* Api */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 146628842FF1366A00EBAFCE /* XCRemoteSwiftPackageReference "swiftapi" */;
+			productName = Api;
+		};
 		148B8A102FE745DD00AF8260 /* ProjectService */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 148B8A0F2FE745DD00AF8260 /* XCRemoteSwiftPackageReference "swift-project-service" */;
@@ -1010,11 +1015,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 14D8A13B2FDE19F8006F3D15 /* XCRemoteSwiftPackageReference "swift-audio-marker" */;
 			productName = AudioMarker;
-		};
-		14D998942FE586E9002C5CF6 /* Api */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 14D998932FE586E9002C5CF6 /* XCRemoteSwiftPackageReference "swiftapi" */;
-			productName = Api;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
