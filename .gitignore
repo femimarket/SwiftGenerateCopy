@@ -1,1 +1,8 @@
 Generate2/
+.build/
+.swiftpm/
+DerivedData/
+build/
+xcuserdata/
+*.xcuserdatad/
+.DS_Store
